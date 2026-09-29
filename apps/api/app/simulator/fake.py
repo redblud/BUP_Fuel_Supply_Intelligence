@@ -6,12 +6,14 @@ plus optional "health" and "stale" (true -> every read reports X-Simulator-Stale
 """
 
 import json
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
 from app.domain.models import Allocation
 from app.simulator.client import SimResponse
 from app.simulator.errors import SimulatorError
+from app.simulator.sse import SseEvent
 
 
 def load_fixture(fixture_dir: Path, scenario: str) -> dict[str, Any]:
@@ -49,6 +51,11 @@ class FakeSimulatorClient:
 
     async def admin(self, action: str) -> dict:
         raise SimulatorError("FAKE_READ_ONLY", "Fake simulator has no admin controls.", 501)
+
+    async def stream_events(self) -> AsyncIterator[SseEvent]:
+        """Fixtures have no push channel."""
+        return
+        yield
 
     async def close(self) -> None:
         return None

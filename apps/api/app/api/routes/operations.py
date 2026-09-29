@@ -27,7 +27,7 @@ NOT_READY = {503: {"model": ErrorBody}}
 
 @router.get("/state", response_model=NetworkState, responses=NOT_READY)
 async def get_state(ctx: AppContext = Depends(get_ctx)) -> NetworkState:
-    state = await ctx.state.refresh()
+    state = await ctx.state.snapshot()
     if state is None:
         err = ctx.state.last_error
         raise HTTPException(503, detail={"code": err.code if err else "UNAVAILABLE", "message": str(err)})
@@ -42,7 +42,7 @@ async def get_plan(ctx: AppContext = Depends(get_ctx)) -> Plan:
 @router.get("/dashboard", response_model=DashboardResponse)
 async def dashboard(ctx: AppContext = Depends(get_ctx)) -> DashboardResponse:
     """One poll for the whole operator screen. Degrades instead of failing."""
-    state = await ctx.state.refresh()
+    state = await ctx.state.snapshot()
     health = await system_health(ctx)
     plan = None
     if state is not None:

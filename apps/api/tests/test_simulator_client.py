@@ -134,6 +134,29 @@ async def test_create_allocation_conflict_code():
     assert (exc.value.code, exc.value.status, exc.value.retryable) == ("INSUFFICIENT_INVENTORY", 409, False)
 
 
+async def test_stream_events_yields_parsed_events():
+    body = b': connected\n\nevent: simulation.tick\ndata: {"tick": 3}\n\n: keepalive\n\n'
+    h = Harness(sequence(httpx.Response(200, content=body, headers={"content-type": "text/event-stream"})))
+    events = [e async for e in h.client.stream_events()]
+    assert [e.event for e in events] == ["comment", "simulation.tick", "comment"]
+    assert events[1].data == {"tick": 3}
+    assert h.requests[0].url.path == "/v1/stream"
+
+
+async def test_stream_connect_failure_is_a_simulator_error():
+    h = Harness(sequence(httpx.Response(503, json={"detail": {"code": "FAULT_INJECTED", "message": "stream_disconnect"}})))
+    with pytest.raises(SimulatorError) as exc:
+        [e async for e in h.client.stream_events()]
+    assert exc.value.code == "FAULT_INJECTED" and exc.value.retryable
+
+
+async def test_stream_transport_error_is_a_simulator_error():
+    h = Harness(sequence(httpx.ConnectError("refused")))
+    with pytest.raises(SimulatorError) as exc:
+        [e async for e in h.client.stream_events()]
+    assert exc.value.code == "UNREACHABLE"
+
+
 async def test_cancel_allocation_typed_and_cannot_cancel():
     h = Harness(sequence(httpx.Response(200, json={**ALLOCATION, "status": "CANCELLED"})))
     assert (await h.client.cancel_allocation(7)).status == "CANCELLED"

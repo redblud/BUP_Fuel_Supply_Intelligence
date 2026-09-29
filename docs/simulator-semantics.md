@@ -52,4 +52,7 @@ Status: UNVERIFIED. Adapter assumes newest first and reverses it.
 Status: UNVERIFIED. Forecast multiplies by `region.demand_factor`; calibration absorbs the error if it is wrong.
 
 ### Reset identity
-Status: UNVERIFIED. After reset, do allocation ids restart at 1? `run_id` is currently `scenario:seed`, so a reset is not yet detected.
+Status: UNVERIFIED. After reset, do allocation ids restart at 1? Detection does not depend on the answer: a reset is inferred from tick or `sim_time` regression, allocation ids going backwards or being reused for another idempotency key, a scenario/seed change, or the SSE `simulator.notice` "Simulation reset" (`app/state/run_identity.py`). Each detected reset bumps `run_id` to `scenario:seed#n`. Confirm against the real simulator that `/admin/reset` produces at least one of these signals.
+
+### SSE event payloads
+Status: UNVERIFIED. `StateSync` treats `simulation.tick` / `allocation.status_changed` / `inventory.updated` only as hints to refresh over REST and reads `tick` from `simulation.tick` data if present; a missing or different payload shape costs nothing but `latest_sse_tick`.

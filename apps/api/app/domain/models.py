@@ -125,12 +125,39 @@ class DemandObservation(BaseModel):
     unmet_liters: float
 
 
+class HistoryGap(BaseModel):
+    """Demand ticks we never observed for one station/fuel (`HISTORY_GAP`). Never filled with invented values."""
+
+    station_id: str
+    fuel_type: FuelType
+    from_tick: int
+    to_tick: int
+
+
 class SimMetrics(BaseModel):
     served_demand_liters: float
     unmet_demand_liters: float
     service_level: float
     allocation_liters: float
     allocation_failures: int
+
+
+class AllocationTransition(BaseModel):
+    """One observed status of a simulator allocation, with the simulator tick it applies to."""
+
+    run_id: str
+    allocation_id: int
+    status: AllocationStatus
+    tick: int
+    observed_at: datetime
+
+
+class TrackedAllocation(BaseModel):
+    """A simulator allocation and its observed lifecycle. Identity is (run_id, allocation_id)."""
+
+    run_id: str
+    allocation: Allocation
+    transitions: list[AllocationTransition]
 
 
 # ---------------------------------------------------------------------------
@@ -156,7 +183,8 @@ class SnapshotMeta(BaseModel):
 class NetworkState(BaseModel):
     """One consistent view of the world. Built only by the API; intelligence never fetches.
 
-    `demand_history` holds recent observations, oldest first.
+    `demand_history` holds recent observations, oldest first: the simulator window merged with what we persisted,
+    so it can be longer than the 200-row REST window. `history_gaps` lists observation ticks that are missing.
     """
 
     meta: SnapshotMeta
@@ -169,6 +197,7 @@ class NetworkState(BaseModel):
     events: list[SimEvent]
     allocations: list[Allocation]
     demand_history: list[DemandObservation]
+    history_gaps: list[HistoryGap] = Field(default_factory=list)
     metrics: SimMetrics | None = None
 
 
@@ -309,6 +338,7 @@ TripCode = Literal[
     "FORECAST_DRIFT",
     "PRIMARY_PLANNER_FAILED",
     "STATE_SYNC_SUSPECT",
+    "HISTORY_GAP",
 ]
 TripAction = Literal["ALERT", "REPLAN", "USE_FALLBACK", "REQUIRE_MANUAL_REVIEW", "FREEZE_AUTOMATION", "FULL_RESYNC"]
 

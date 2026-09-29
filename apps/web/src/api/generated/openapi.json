@@ -154,6 +154,48 @@
         "title": "AllocationRequest",
         "type": "object"
       },
+      "AllocationTransition": {
+        "description": "One observed status of a simulator allocation, with the simulator tick it applies to.",
+        "properties": {
+          "allocation_id": {
+            "title": "Allocation Id",
+            "type": "integer"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "title": "Observed At",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "PENDING",
+              "IN_TRANSIT",
+              "ARRIVED",
+              "FAILED",
+              "CANCELLED"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "tick": {
+            "title": "Tick",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "run_id",
+          "allocation_id",
+          "status",
+          "tick",
+          "observed_at"
+        ],
+        "title": "AllocationTransition",
+        "type": "object"
+      },
       "AlternativeAction": {
         "properties": {
           "expected_arrival_tick": {
@@ -505,6 +547,40 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "HistoryGap": {
+        "description": "Demand ticks we never observed for one station/fuel (`HISTORY_GAP`). Never filled with invented values.",
+        "properties": {
+          "from_tick": {
+            "title": "From Tick",
+            "type": "integer"
+          },
+          "fuel_type": {
+            "enum": [
+              "DIESEL",
+              "PETROL",
+              "OCTANE"
+            ],
+            "title": "Fuel Type",
+            "type": "string"
+          },
+          "station_id": {
+            "title": "Station Id",
+            "type": "string"
+          },
+          "to_tick": {
+            "title": "To Tick",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "station_id",
+          "fuel_type",
+          "from_tick",
+          "to_tick"
+        ],
+        "title": "HistoryGap",
+        "type": "object"
+      },
       "InventoryProjection": {
         "properties": {
           "fuel_type": {
@@ -542,7 +618,7 @@
         "type": "object"
       },
       "NetworkState": {
-        "description": "One consistent view of the world. Built only by the API; intelligence never fetches.\n\n`demand_history` holds recent observations, oldest first.",
+        "description": "One consistent view of the world. Built only by the API; intelligence never fetches.\n\n`demand_history` holds recent observations, oldest first: the simulator window merged with what we persisted,\nso it can be longer than the 200-row REST window. `history_gaps` lists observation ticks that are missing.",
         "properties": {
           "allocations": {
             "items": {
@@ -570,6 +646,13 @@
               "$ref": "#/components/schemas/SimEvent"
             },
             "title": "Events",
+            "type": "array"
+          },
+          "history_gaps": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryGap"
+            },
+            "title": "History Gaps",
             "type": "array"
           },
           "meta": {
@@ -1489,6 +1572,32 @@
         "title": "SystemHealth",
         "type": "object"
       },
+      "TrackedAllocation": {
+        "description": "A simulator allocation and its observed lifecycle. Identity is (run_id, allocation_id).",
+        "properties": {
+          "allocation": {
+            "$ref": "#/components/schemas/Allocation"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "transitions": {
+            "items": {
+              "$ref": "#/components/schemas/AllocationTransition"
+            },
+            "title": "Transitions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "run_id",
+          "allocation",
+          "transitions"
+        ],
+        "title": "TrackedAllocation",
+        "type": "object"
+      },
       "Trip": {
         "properties": {
           "code": {
@@ -1504,7 +1613,8 @@
               "STATION_UNREACHABLE",
               "FORECAST_DRIFT",
               "PRIMARY_PLANNER_FAILED",
-              "STATE_SYNC_SUSPECT"
+              "STATE_SYNC_SUSPECT",
+              "HISTORY_GAP"
             ],
             "title": "Code",
             "type": "string"
@@ -1638,6 +1748,89 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/allocations": {
+      "get": {
+        "description": "Simulator allocations of the current run with their observed lifecycle (newest allocation first).\n\n`status` filters on the current status. Only allocations this API has observed are listed.",
+        "operationId": "list_allocations_api_allocations_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "PENDING",
+                    "IN_TRANSIT",
+                    "ARRIVED",
+                    "FAILED",
+                    "CANCELLED"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TrackedAllocation"
+                  },
+                  "title": "Response List Allocations Api Allocations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Allocations",
+        "tags": [
+          "history"
+        ]
+      }
+    },
     "/api/automation": {
       "get": {
         "operationId": "get_automation_api_automation_get",
@@ -1717,6 +1910,260 @@
         "summary": "Dashboard",
         "tags": [
           "operations"
+        ]
+      }
+    },
+    "/api/decisions": {
+      "get": {
+        "description": "Recommendation decision history (approve, reject, execute, expire), newest first.\n\nBacked by the in-memory lifecycle until the execution gateway persists it (Dev 4).",
+        "operationId": "list_decisions_api_decisions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "PROPOSED",
+                    "APPROVED",
+                    "EXECUTING",
+                    "DONE",
+                    "FAILED",
+                    "EXPIRED",
+                    "SUPERSEDED",
+                    "REJECTED"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RecommendationState"
+                  },
+                  "title": "Response List Decisions Api Decisions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Decisions",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/demand-history": {
+      "get": {
+        "description": "Stored demand observations of the current run, oldest first; `limit` keeps the newest rows.\n\nReaches further back than the simulator's own 200-row window. Falls back to the snapshot's window if nothing is stored.",
+        "operationId": "demand_history_api_demand_history_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "station_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Station Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "fuel_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "DIESEL",
+                    "PETROL",
+                    "OCTANE"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Fuel Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 2000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DemandObservation"
+                  },
+                  "title": "Response Demand History Api Demand History Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Demand History",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/events": {
+      "get": {
+        "description": "Simulator events (demand spikes, disruptions, outages, ...) from the latest snapshot, newest start first.",
+        "operationId": "list_events_api_events_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "SCHEDULED",
+                    "ACTIVE",
+                    "RESOLVED"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SimEvent"
+                  },
+                  "title": "Response List Events Api Events Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Events",
+        "tags": [
+          "history"
         ]
       }
     },

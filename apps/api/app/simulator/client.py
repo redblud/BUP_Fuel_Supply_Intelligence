@@ -6,12 +6,12 @@ NetworkState (see app/simulator/mapper.py and app/state/reconciler.py).
 GETs are retried with jittered backoff when the failure is retryable. POST and admin calls are
 never retried here: the execution gateway owns the retry policy and must reuse the same idempotency key.
 
-TODO(dev1): SSE listener (sse.py).
+The SSE stream is opened with `stream_events()`; `StateSync` (app/state/sync.py) consumes it.
 """
 
 import asyncio
 import random
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -19,6 +19,7 @@ import httpx
 
 from app.domain.models import Allocation
 from app.simulator.errors import SimulatorError
+from app.simulator.sse import SseEvent, parse_sse_lines
 
 # Simulator resource name -> path. Keys are also the fixture keys in tests/fixtures/*.json.
 RESOURCES = {
@@ -52,6 +53,8 @@ class SimulatorClient(Protocol):
 
     async def admin(self, action: str) -> dict: ...
 
+    def stream_events(self) -> AsyncIterator[SseEvent]: ...
+
     async def close(self) -> None: ...
 
 
@@ -84,6 +87,7 @@ class RealSimulatorClient:
         backoff_max: float = 2.0,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         jitter: Callable[[], float] = random.random,
+        stream_read_timeout: float = 45.0,
     ) -> None:
         """`max_retries` counts retries after the first attempt (GET only). Delay is full jitter: jitter() * min(max, base * 2^n)."""
         timeout = httpx.Timeout(read_timeout, connect=connect_timeout)
@@ -93,6 +97,7 @@ class RealSimulatorClient:
         self._backoff_max = backoff_max
         self._sleep = sleep
         self._jitter = jitter
+        self._stream_timeout = httpx.Timeout(stream_read_timeout, connect=connect_timeout)  # keepalive arrives every 15 s
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         try:
@@ -135,6 +140,21 @@ class RealSimulatorClient:
     async def admin(self, action: str) -> dict:
         """Demo/test controls only (run | pause | step | reset). Never used by planning logic."""
         return (await self._request("POST", f"/admin/{action}")).json()
+
+    async def stream_events(self) -> AsyncIterator[SseEvent]:
+        """Open `/v1/stream` and yield events until it ends. Raises SimulatorError if it cannot connect (e.g. a stream_disconnect
+        fault answers 503) or drops mid-stream; the caller reconnects with backoff and then does a full REST resync."""
+        try:
+            async with self._http.stream("GET", "/v1/stream", timeout=self._stream_timeout) as response:
+                if response.status_code >= 400:
+                    await response.aread()
+                    raise _error_from(response)
+                async for event in parse_sse_lines(response.aiter_lines()):
+                    yield event
+        except httpx.TimeoutException as exc:
+            raise SimulatorError("TIMEOUT", str(exc)) from exc
+        except httpx.TransportError as exc:
+            raise SimulatorError("UNREACHABLE", str(exc)) from exc
 
     async def close(self) -> None:
         await self._http.aclose()

@@ -21,10 +21,18 @@ async def system_health(ctx: AppContext) -> SystemHealth:
         c["simulator"] = ComponentHealth(status="DOWN", detail=str(exc))
     try:
         startups = await ctx.db.ping()
-        c["database"] = ComponentHealth(status="HEALTHY", detail=f"sqlite · {startups} recorded startups")
+        persistence_error = ctx.state.persistence_error
+        c["database"] = ComponentHealth(
+            status="DEGRADED" if persistence_error else "HEALTHY",
+            detail=persistence_error or f"sqlite · {startups} recorded startups",
+        )
     except Exception as exc:  # noqa: BLE001
         c["database"] = ComponentHealth(status="DOWN", detail=str(exc))
-    c["sse"] = ComponentHealth(status="UNKNOWN", detail="not implemented")
+    sse = ctx.state.sse_status
+    c["sse"] = ComponentHealth(
+        status={"connected": "HEALTHY", "reconnecting": "DEGRADED", "connecting": "DEGRADED"}.get(sse, "UNKNOWN"),
+        detail="not used in fixture mode" if sse == "disabled" else f"{sse} · latest tick {ctx.state.latest_sse_tick}",
+    )
     c["execution"] = ComponentHealth(status="UNKNOWN", detail="not implemented")
     worst = max(c.values(), key=lambda h: RANK[h.status]).status
     return SystemHealth(status="HEALTHY" if worst == "UNKNOWN" else worst, components=c)

@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, Float, Index, Integer, String, Text
+from sqlalchemy import DateTime, Float, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -57,6 +57,25 @@ class StationStateObservation(Base):
     fuel_type: Mapped[str] = mapped_column(String(16), primary_key=True)
     inventory: Mapped[float] = mapped_column(Float)
     station_status: Mapped[str] = mapped_column(String(16))
+
+
+class AllocationTransitionRow(Base):
+    """One observed status of a simulator allocation; `payload` is the allocation as observed (JSON)."""
+
+    __tablename__ = "allocation_transitions"
+    __table_args__ = (
+        UniqueConstraint("run_id", "allocation_id", "status", name="uq_transition_run_alloc_status"),
+        Index("ix_transition_run_key", "run_id", "idempotency_key"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[str] = mapped_column(String(200))
+    allocation_id: Mapped[int] = mapped_column(Integer)
+    idempotency_key: Mapped[str] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(16))
+    tick: Mapped[int] = mapped_column(Integer)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    payload: Mapped[str] = mapped_column(Text)
 
 
 class SnapshotRow(Base):
