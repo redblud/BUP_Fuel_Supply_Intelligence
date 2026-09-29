@@ -31,3 +31,32 @@ def test_disrupted_route_is_avoided() -> None:
 def test_normal_world_is_calm() -> None:
     plan = build_plan(load_state("normal"))
     assert not [r for r in plan.risks if r.level == "CRITICAL"]
+
+
+def test_recommendation_impact_and_confidence_are_deterministic() -> None:
+    state = load_state("route-disruption")
+    first = build_plan(state)
+    second = build_plan(state)
+    first_data = [r.model_dump() for r in first.recommendations]
+    second_data = [r.model_dump() for r in second.recommendations]
+    assert first_data == second_data
+    assert first.recommendations
+    for rec in first.recommendations:
+        assert rec.projected_stockout_ticks_avoided >= 0
+        assert rec.projected_unmet_demand_liters_avoided >= 0
+        assert rec.inventory_at_arrival_with_liters >= rec.inventory_at_arrival_without_liters
+        assert rec.confidence in {"HIGH", "MEDIUM", "LOW", "INSUFFICIENT_DATA"}
+        if rec.confidence == "INSUFFICIENT_DATA":
+            assert rec.forecast_error_band_liters_per_tick is None
+        else:
+            assert rec.forecast_error_band_liters_per_tick is not None
+            assert rec.forecast_error_mae_liters_per_tick is not None
+        assert "chance" not in rec.confidence_basis.lower()
+        assert "probability" not in rec.confidence_basis.lower()
+
+def test_impact_arrival_values_match_recommendation_projection() -> None:
+    state = load_state("route-disruption")
+    plan = build_plan(state)
+    for rec in plan.recommendations:
+        assert rec.inventory_at_arrival_without_liters == round(rec.projected_inventory_at_arrival, 3)
+        assert rec.inventory_at_arrival_with_liters >= rec.inventory_at_arrival_without_liters
