@@ -38,6 +38,29 @@ Source of truth: `apps/api/app/domain/models.py`. It becomes `apps/web/src/api/g
 | POST | `/api/recommendations/{id}/approve` | `RecommendationState` | 501 stub, Dev 4 |
 | POST | `/api/recommendations/{id}/reject` | `RecommendationState` | 501 stub, Dev 4 |
 | POST | `/api/sim/control` `{action: run\|pause\|step}` | simulator admin response | done (real mode only; demo use) |
+| GET | `/api/allocations?status&limit` | `TrackedAllocation[]`: simulator allocations of the current run with observed transitions | done |
+| GET | `/api/events?status&limit` | `SimEvent[]` from the latest snapshot, newest start first | done |
+| GET | `/api/demand-history?station_id&fuel_type&limit` | `DemandObservation[]`, oldest first, newest `limit` rows (max 2000), from stored history | done |
+| GET | `/api/decisions?status&limit` | `RecommendationState[]`, newest first | in-memory until Dev 4 persists the lifecycle |
+
+`/api/dashboard` stays one fast poll: in real mode it serves the snapshot cached by the background sync (SSE hints + REST
+truth), never a per-request simulator read. Heavy history goes through the endpoints above. `/api/allocations`,
+`/api/events` and `/api/demand-history` answer 503 (`ErrorBody`) when no snapshot exists.
+
+### Snapshot trust (`meta.freshness`)
+
+| Value | Meaning | Trusted |
+|---|---|---|
+| `FRESH` / `FIXTURE` | Consistent, not stale (or a fixture) | yes |
+| `STALE` | Simulator sent `X-Simulator-Stale` | no |
+| `TORN` | Tick moved more than `SNAPSHOT_TICK_TOLERANCE` during the read | no |
+| `UNAVAILABLE` | Simulator unreadable; this is the **last trusted** snapshot, so `meta.retrieved_at` shows its real age | no |
+| `RESET_UNCERTAIN` | A reset was detected (`run_id` gained a `#n` suffix); trusted again after the next clean full resync | no |
+
+`NetworkState.history_gaps` lists demand ticks we never observed (`HISTORY_GAP`); they are never filled with invented
+values. `NetworkState.demand_history` merges the simulator window with stored observations
+(`DEMAND_HISTORY_TICKS`, default 96 ticks). For the execution gateway, `StateService.allocation_status(allocation_id=…)` /
+`(idempotency_key=…)` answers "what is the status of allocation X / key K" from the tracked lifecycle.
 
 Errors use `{"detail": {"code": "UPPER_SNAKE", "message": "..."}}`.
 

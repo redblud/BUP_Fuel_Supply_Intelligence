@@ -30,6 +30,10 @@ class Settings(BaseSettings):
 
     automation_default_mode: Literal["ADVISORY", "GUARDED_AUTO", "MANUAL_DEMO"] = "ADVISORY"
     snapshot_tick_tolerance: int = 1
+    sync_fallback_interval: float = 5.0  # REST poll when SSE is silent or down
+    sync_resync_interval: float = 1.0  # retry cadence after a stale, torn, or failed read
+    sync_min_refresh_gap: float = 0.25  # coalesce bursts of tick events
+    demand_history_ticks: int = 96  # stored demand history handed to the planner (12 rows per tick), longer than the 200-row REST window
     snapshot_stale_after_seconds: float = 10.0
 
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]

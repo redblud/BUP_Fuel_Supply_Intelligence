@@ -4,6 +4,28 @@
  */
 
 export interface paths {
+    "/api/allocations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Allocations
+         * @description Simulator allocations of the current run with their observed lifecycle (newest allocation first).
+         *
+         *     `status` filters on the current status. Only allocations this API has observed are listed.
+         */
+        get: operations["list_allocations_api_allocations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/automation": {
         parameters: {
             query?: never;
@@ -34,6 +56,70 @@ export interface paths {
          * @description One poll for the whole operator screen. Degrades instead of failing.
          */
         get: operations["dashboard_api_dashboard_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Decisions
+         * @description Recommendation decision history (approve, reject, execute, expire), newest first.
+         *
+         *     Backed by the in-memory lifecycle until the execution gateway persists it (Dev 4).
+         */
+        get: operations["list_decisions_api_decisions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/demand-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Demand History
+         * @description Stored demand observations of the current run, oldest first; `limit` keeps the newest rows.
+         *
+         *     Reaches further back than the simulator's own 200-row window. Falls back to the snapshot's window if nothing is stored.
+         */
+        get: operations["demand_history_api_demand_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Events
+         * @description Simulator events (demand spikes, disruptions, outages, ...) from the latest snapshot, newest start first.
+         */
+        get: operations["list_events_api_events_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -222,6 +308,28 @@ export interface components {
             /** Source Depot Id */
             source_depot_id: string;
         };
+        /**
+         * AllocationTransition
+         * @description One observed status of a simulator allocation, with the simulator tick it applies to.
+         */
+        AllocationTransition: {
+            /** Allocation Id */
+            allocation_id: number;
+            /**
+             * Observed At
+             * Format: date-time
+             */
+            observed_at: string;
+            /** Run Id */
+            run_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "PENDING" | "IN_TRANSIT" | "ARRIVED" | "FAILED" | "CANCELLED";
+            /** Tick */
+            tick: number;
+        };
         /** AlternativeAction */
         AlternativeAction: {
             /** Expected Arrival Tick */
@@ -353,6 +461,23 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /**
+         * HistoryGap
+         * @description Demand ticks we never observed for one station/fuel (`HISTORY_GAP`). Never filled with invented values.
+         */
+        HistoryGap: {
+            /** From Tick */
+            from_tick: number;
+            /**
+             * Fuel Type
+             * @enum {string}
+             */
+            fuel_type: "DIESEL" | "PETROL" | "OCTANE";
+            /** Station Id */
+            station_id: string;
+            /** To Tick */
+            to_tick: number;
+        };
         /** InventoryProjection */
         InventoryProjection: {
             /**
@@ -371,7 +496,8 @@ export interface components {
          * NetworkState
          * @description One consistent view of the world. Built only by the API; intelligence never fetches.
          *
-         *     `demand_history` holds recent observations, oldest first.
+         *     `demand_history` holds recent observations, oldest first: the simulator window merged with what we persisted,
+         *     so it can be longer than the 200-row REST window. `history_gaps` lists observation ticks that are missing.
          */
         NetworkState: {
             /** Allocations */
@@ -382,6 +508,8 @@ export interface components {
             depots: components["schemas"]["Depot"][];
             /** Events */
             events: components["schemas"]["SimEvent"][];
+            /** History Gaps */
+            history_gaps?: components["schemas"]["HistoryGap"][];
             meta: components["schemas"]["SnapshotMeta"];
             metrics?: components["schemas"]["SimMetrics"] | null;
             /** Regions */
@@ -743,13 +871,24 @@ export interface components {
              */
             status: "HEALTHY" | "DEGRADED" | "DOWN" | "UNKNOWN";
         };
+        /**
+         * TrackedAllocation
+         * @description A simulator allocation and its observed lifecycle. Identity is (run_id, allocation_id).
+         */
+        TrackedAllocation: {
+            allocation: components["schemas"]["Allocation"];
+            /** Run Id */
+            run_id: string;
+            /** Transitions */
+            transitions: components["schemas"]["AllocationTransition"][];
+        };
         /** Trip */
         Trip: {
             /**
              * Code
              * @enum {string}
              */
-            code: "SNAPSHOT_STALE" | "SNAPSHOT_TORN" | "SIMULATOR_UNAVAILABLE" | "RESET_UNCERTAIN" | "EXECUTION_UNKNOWN" | "PERSISTENCE_FAILURE" | "RUN_ID_UNKNOWN" | "RECOMMENDATION_EXPIRED" | "STATION_UNREACHABLE" | "FORECAST_DRIFT" | "PRIMARY_PLANNER_FAILED" | "STATE_SYNC_SUSPECT";
+            code: "SNAPSHOT_STALE" | "SNAPSHOT_TORN" | "SIMULATOR_UNAVAILABLE" | "RESET_UNCERTAIN" | "EXECUTION_UNKNOWN" | "PERSISTENCE_FAILURE" | "RUN_ID_UNKNOWN" | "RECOMMENDATION_EXPIRED" | "STATION_UNREACHABLE" | "FORECAST_DRIFT" | "PRIMARY_PLANNER_FAILED" | "STATE_SYNC_SUSPECT" | "HISTORY_GAP";
             /** Detected Tick */
             detected_tick: number | null;
             /** Message */
@@ -800,6 +939,47 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_allocations_api_allocations_get: {
+        parameters: {
+            query?: {
+                status?: ("PENDING" | "IN_TRANSIT" | "ARRIVED" | "FAILED" | "CANCELLED") | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrackedAllocation"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     get_automation_api_automation_get: {
         parameters: {
             query?: never;
@@ -869,6 +1049,121 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DashboardResponse"];
+                };
+            };
+        };
+    };
+    list_decisions_api_decisions_get: {
+        parameters: {
+            query?: {
+                status?: ("PROPOSED" | "APPROVED" | "EXECUTING" | "DONE" | "FAILED" | "EXPIRED" | "SUPERSEDED" | "REJECTED") | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationState"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    demand_history_api_demand_history_get: {
+        parameters: {
+            query?: {
+                station_id?: string | null;
+                fuel_type?: ("DIESEL" | "PETROL" | "OCTANE") | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DemandObservation"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    list_events_api_events_get: {
+        parameters: {
+            query?: {
+                status?: ("SCHEDULED" | "ACTIVE" | "RESOLVED") | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimEvent"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
                 };
             };
         };
