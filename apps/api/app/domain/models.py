@@ -473,6 +473,21 @@ class DashboardResponse(BaseModel):
     last_trusted_age_seconds: float | None
 
 
+class AiBriefRequest(BaseModel):
+    question: str | None = Field(default=None, max_length=500, description="Optional question; null asks for a general briefing.")
+
+
+class AiBrief(BaseModel):
+    """Advisory text written by a language model from the current snapshot and plan. It never executes or approves anything."""
+
+    text: str
+    model: str
+    generated_by: Literal["groq"] = "groq"
+    run_id: str
+    tick: int
+    freshness: SnapshotFreshness = Field(description="Trust in the data behind this text; anything but FRESH/FIXTURE is stale or degraded.")
+
+
 class SimControlRequest(BaseModel):
     action: Literal["run", "pause", "step"]
 
