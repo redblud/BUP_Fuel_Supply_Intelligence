@@ -187,12 +187,57 @@
         "title": "AlternativeAction",
         "type": "object"
       },
+      "ApprovalRequest": {
+        "properties": {
+          "confirm_override": {
+            "default": false,
+            "title": "Confirm Override",
+            "type": "boolean"
+          },
+          "override_reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Override Reason"
+          }
+        },
+        "title": "ApprovalRequest",
+        "type": "object"
+      },
       "AutomationState": {
         "properties": {
+          "allowed_fuels": {
+            "items": {
+              "enum": [
+                "DIESEL",
+                "PETROL",
+                "OCTANE"
+              ],
+              "type": "string"
+            },
+            "title": "Allowed Fuels",
+            "type": "array"
+          },
           "kill_switch": {
             "description": "When true, nothing executes, in any mode.",
             "title": "Kill Switch",
             "type": "boolean"
+          },
+          "max_liters_per_hour": {
+            "default": 0.0,
+            "title": "Max Liters Per Hour",
+            "type": "number"
+          },
+          "max_quantity_per_allocation": {
+            "default": 0.0,
+            "title": "Max Quantity Per Allocation",
+            "type": "number"
           },
           "mode": {
             "enum": [
@@ -202,6 +247,23 @@
             ],
             "title": "Mode",
             "type": "string"
+          },
+          "mode_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode Expires At"
+          },
+          "ttl_minutes": {
+            "default": 30,
+            "title": "Ttl Minutes",
+            "type": "integer"
           }
         },
         "required": [
@@ -209,6 +271,113 @@
           "kill_switch"
         ],
         "title": "AutomationState",
+        "type": "object"
+      },
+      "AutomationUpdateRequest": {
+        "properties": {
+          "allowed_fuels": {
+            "items": {
+              "enum": [
+                "DIESEL",
+                "PETROL",
+                "OCTANE"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Allowed Fuels",
+            "type": "array"
+          },
+          "max_liters_per_hour": {
+            "default": 0.0,
+            "minimum": 0.0,
+            "title": "Max Liters Per Hour",
+            "type": "number"
+          },
+          "max_quantity_per_allocation": {
+            "default": 0.0,
+            "minimum": 0.0,
+            "title": "Max Quantity Per Allocation",
+            "type": "number"
+          },
+          "mode": {
+            "enum": [
+              "ADVISORY",
+              "GUARDED_AUTO",
+              "MANUAL_DEMO"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "ttl_minutes": {
+            "default": 30,
+            "maximum": 120.0,
+            "minimum": 1.0,
+            "title": "Ttl Minutes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "AutomationUpdateRequest",
+        "type": "object"
+      },
+      "BlockedCase": {
+        "description": "A high/critical risk for which the planner could not form a safe executable shipment.",
+        "properties": {
+          "factors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Factors",
+            "type": "array"
+          },
+          "fuel_type": {
+            "enum": [
+              "DIESEL",
+              "PETROL",
+              "OCTANE"
+            ],
+            "title": "Fuel Type",
+            "type": "string"
+          },
+          "id": {
+            "description": "Deterministic identifier for this blocked case at the current tick.",
+            "title": "Id",
+            "type": "string"
+          },
+          "reason_code": {
+            "enum": [
+              "STATION_UNREACHABLE",
+              "STATION_OUTAGE",
+              "DEPOT_BELOW_RESERVE",
+              "DISPATCH_CAPACITY_FULL",
+              "STATION_CAPACITY_FULL",
+              "MIN_SHIPMENT",
+              "ALREADY_COVERED"
+            ],
+            "title": "Reason Code",
+            "type": "string"
+          },
+          "station_id": {
+            "title": "Station Id",
+            "type": "string"
+          },
+          "summary": {
+            "description": "Single-line operator-facing explanation.",
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "station_id",
+          "fuel_type",
+          "reason_code",
+          "summary"
+        ],
+        "title": "BlockedCase",
         "type": "object"
       },
       "ComponentHealth": {
@@ -359,6 +528,88 @@
         "title": "DemandObservation",
         "type": "object"
       },
+      "DemoClearRequest": {
+        "properties": {
+          "reason": {
+            "default": "demo recovery",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "title": "DemoClearRequest",
+        "type": "object"
+      },
+      "DemoEventRequest": {
+        "properties": {
+          "duration_ticks": {
+            "default": 1,
+            "exclusiveMinimum": 0.0,
+            "title": "Duration Ticks",
+            "type": "integer"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "title": "Parameters",
+            "type": "object"
+          },
+          "start_tick": {
+            "default": 0,
+            "title": "Start Tick",
+            "type": "integer"
+          },
+          "type": {
+            "enum": [
+              "demand_spike",
+              "route_disruption",
+              "station_outage",
+              "depot_constraint",
+              "shipment_delay",
+              "supply_shortfall"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "DemoEventRequest",
+        "type": "object"
+      },
+      "DemoFaultRequest": {
+        "properties": {
+          "duration_seconds": {
+            "default": 60,
+            "exclusiveMinimum": 0.0,
+            "maximum": 3600.0,
+            "title": "Duration Seconds",
+            "type": "integer"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "title": "Parameters",
+            "type": "object"
+          },
+          "type": {
+            "enum": [
+              "latency",
+              "unavailable",
+              "error_rate",
+              "stale_data",
+              "stream_disconnect"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "DemoFaultRequest",
+        "type": "object"
+      },
       "Depot": {
         "properties": {
           "capacity": {
@@ -426,38 +677,6 @@
         "title": "Depot",
         "type": "object"
       },
-      "DepotSupplyProjection": {
-        "description": "Expected depot inventory after scheduled supply arrivals and crisis effects.",
-        "properties": {
-          "depot_id": {
-            "title": "Depot Id",
-            "type": "string"
-          },
-          "fuel_type": {
-            "enum": [
-              "DIESEL",
-              "PETROL",
-              "OCTANE"
-            ],
-            "title": "Fuel Type",
-            "type": "string"
-          },
-          "points": {
-            "items": {
-              "$ref": "#/components/schemas/ProjectionPoint"
-            },
-            "title": "Points",
-            "type": "array"
-          }
-        },
-        "required": [
-          "depot_id",
-          "fuel_type",
-          "points"
-        ],
-        "title": "DepotSupplyProjection",
-        "type": "object"
-      },
       "ErrorBody": {
         "properties": {
           "code": {
@@ -483,10 +702,6 @@
             "description": "alpha in forecast = alpha x structural demand.",
             "title": "Calibration",
             "type": "number"
-          },
-          "error": {
-            "$ref": "#/components/schemas/ForecastError",
-            "description": "Measured rolling error; unavailable for a cold start."
           },
           "fuel_type": {
             "enum": [
@@ -523,73 +738,9 @@
           "start_tick",
           "liters_per_tick",
           "calibration",
-          "error",
           "method"
         ],
         "title": "Forecast",
-        "type": "object"
-      },
-      "ForecastError": {
-        "description": "Measured one-step forecast error over recent demand observations.",
-        "properties": {
-          "mae_liters": {
-            "anyOf": [
-              {
-                "minimum": 0.0,
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mae Liters"
-          },
-          "rmse_liters": {
-            "anyOf": [
-              {
-                "minimum": 0.0,
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Rmse Liters"
-          },
-          "sample_count": {
-            "minimum": 0.0,
-            "title": "Sample Count",
-            "type": "integer"
-          },
-          "smape_percent": {
-            "anyOf": [
-              {
-                "minimum": 0.0,
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Smape Percent"
-          },
-          "wape_percent": {
-            "anyOf": [
-              {
-                "minimum": 0.0,
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Wape Percent"
-          }
-        },
-        "required": [
-          "sample_count"
-        ],
-        "title": "ForecastError",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -616,20 +767,12 @@
             "title": "Fuel Type",
             "type": "string"
           },
-          "minimum_projected_inventory": {
-            "title": "Minimum Projected Inventory",
-            "type": "number"
-          },
           "points": {
             "items": {
               "$ref": "#/components/schemas/ProjectionPoint"
             },
             "title": "Points",
             "type": "array"
-          },
-          "projected_shortage_liters": {
-            "title": "Projected Shortage Liters",
-            "type": "number"
           },
           "safety_stock": {
             "title": "Safety Stock",
@@ -644,11 +787,29 @@
           "station_id",
           "fuel_type",
           "safety_stock",
-          "minimum_projected_inventory",
-          "projected_shortage_liters",
           "points"
         ],
         "title": "InventoryProjection",
+        "type": "object"
+      },
+      "KillSwitchRequest": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "KillSwitchRequest",
         "type": "object"
       },
       "NetworkState": {
@@ -744,11 +905,12 @@
       },
       "Plan": {
         "properties": {
-          "depot_projections": {
+          "blocked_cases": {
+            "description": "High/critical risks for which no safe executable recommendation could be formed.",
             "items": {
-              "$ref": "#/components/schemas/DepotSupplyProjection"
+              "$ref": "#/components/schemas/BlockedCase"
             },
-            "title": "Depot Projections",
+            "title": "Blocked Cases",
             "type": "array"
           },
           "forecasts": {
@@ -805,7 +967,6 @@
           "run_id",
           "planner_version",
           "forecasts",
-          "depot_projections",
           "projections",
           "risks",
           "recommendations"
@@ -815,11 +976,6 @@
       },
       "ProjectionPoint": {
         "properties": {
-          "demand": {
-            "default": 0.0,
-            "title": "Demand",
-            "type": "number"
-          },
           "incoming": {
             "default": 0.0,
             "title": "Incoming",
@@ -832,11 +988,6 @@
           "tick": {
             "title": "Tick",
             "type": "integer"
-          },
-          "unmet_demand": {
-            "default": 0.0,
-            "title": "Unmet Demand",
-            "type": "number"
           }
         },
         "required": [
@@ -854,6 +1005,22 @@
             },
             "title": "Alternatives",
             "type": "array"
+          },
+          "confidence": {
+            "description": "Qualitative robustness label derived only from measured forecast error and the recommendation's stress margin.",
+            "enum": [
+              "HIGH",
+              "MEDIUM",
+              "LOW",
+              "INSUFFICIENT_DATA"
+            ],
+            "title": "Confidence",
+            "type": "string"
+          },
+          "confidence_basis": {
+            "description": "Human-readable, non-probabilistic basis for the confidence label.",
+            "title": "Confidence Basis",
+            "type": "string"
           },
           "current_inventory": {
             "title": "Current Inventory",
@@ -879,6 +1046,32 @@
             "title": "Factors",
             "type": "array"
           },
+          "forecast_error_band_liters_per_tick": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Measured recent maximum absolute forecast error band; no probabilistic interpretation.",
+            "title": "Forecast Error Band Liters Per Tick"
+          },
+          "forecast_error_mae_liters_per_tick": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Measured recent absolute forecast error (MAE); no probabilistic interpretation.",
+            "title": "Forecast Error Mae Liters Per Tick"
+          },
           "fuel_type": {
             "enum": [
               "DIESEL",
@@ -896,6 +1089,18 @@
             "description": "Deterministic: same NetworkState + Policy -> same id.",
             "title": "Id",
             "type": "string"
+          },
+          "inventory_at_arrival_with_liters": {
+            "description": "Projected inventory at the shipment arrival tick including the recommended shipment, capped by station capacity.",
+            "minimum": 0.0,
+            "title": "Inventory At Arrival With Liters",
+            "type": "number"
+          },
+          "inventory_at_arrival_without_liters": {
+            "description": "Projected inventory at the shipment arrival tick without the recommended shipment.",
+            "minimum": 0.0,
+            "title": "Inventory At Arrival Without Liters",
+            "type": "number"
           },
           "planner_version": {
             "title": "Planner Version",
@@ -937,6 +1142,18 @@
             ],
             "title": "Projected Stockout Tick"
           },
+          "projected_stockout_ticks_avoided": {
+            "description": "Forecast-horizon stockout ticks avoided by this shipment versus no shipment.",
+            "minimum": 0.0,
+            "title": "Projected Stockout Ticks Avoided",
+            "type": "integer"
+          },
+          "projected_unmet_demand_liters_avoided": {
+            "description": "Forecast-horizon unmet demand liters avoided by this shipment versus no shipment.",
+            "minimum": 0.0,
+            "title": "Projected Unmet Demand Liters Avoided",
+            "type": "number"
+          },
           "reason_codes": {
             "items": {
               "enum": [
@@ -946,11 +1163,7 @@
                 "SINGLE_SOURCE",
                 "STATION_OUTAGE",
                 "SCARCITY_LIMITED",
-                "ROUTE_DISRUPTED",
-                "FUEL_SCARCITY",
-                "PROJECTED_SHORTAGE",
-                "DEMAND_PRESSURE",
-                "INCOMING_SUPPLY"
+                "ROUTE_DISRUPTED"
               ],
               "type": "string"
             },
@@ -990,6 +1203,12 @@
           "projected_safety_breach_tick",
           "projected_stockout_tick",
           "stress_margin_liters",
+          "projected_stockout_ticks_avoided",
+          "projected_unmet_demand_liters_avoided",
+          "inventory_at_arrival_without_liters",
+          "inventory_at_arrival_with_liters",
+          "confidence",
+          "confidence_basis",
           "summary",
           "factors",
           "alternatives",
@@ -1078,29 +1297,6 @@
       },
       "RiskAssessment": {
         "properties": {
-          "coverage_hours": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Coverage Hours"
-          },
-          "coverage_ticks": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Current inventory divided by average forecast demand per tick, before incoming supply.",
-            "title": "Coverage Ticks"
-          },
           "current_inventory": {
             "title": "Current Inventory",
             "type": "number"
@@ -1114,7 +1310,7 @@
                 "type": "null"
               }
             ],
-            "description": "Earliest tick a new shipment from a currently stocked, reachable depot could land.",
+            "description": "Earliest tick a new shipment could land; null if unreachable.",
             "title": "Earliest Arrival Tick"
           },
           "fuel_type": {
@@ -1135,10 +1331,6 @@
             ],
             "title": "Level",
             "type": "string"
-          },
-          "minimum_projected_inventory": {
-            "title": "Minimum Projected Inventory",
-            "type": "number"
           },
           "projected_inventory_at_arrival": {
             "anyOf": [
@@ -1161,11 +1353,6 @@
               }
             ],
             "title": "Projected Safety Breach Tick"
-          },
-          "projected_shortage_liters": {
-            "description": "Cumulative forecast demand that cannot be served over the horizon.",
-            "title": "Projected Shortage Liters",
-            "type": "number"
           },
           "projected_stockout_tick": {
             "anyOf": [
@@ -1191,11 +1378,7 @@
                 "SINGLE_SOURCE",
                 "STATION_OUTAGE",
                 "SCARCITY_LIMITED",
-                "ROUTE_DISRUPTED",
-                "FUEL_SCARCITY",
-                "PROJECTED_SHORTAGE",
-                "DEMAND_PRESSURE",
-                "INCOMING_SUPPLY"
+                "ROUTE_DISRUPTED"
               ],
               "type": "string"
             },
@@ -1207,13 +1390,6 @@
             "title": "Redundancy",
             "type": "integer"
           },
-          "risk_drivers": {
-            "items": {
-              "$ref": "#/components/schemas/RiskDriver"
-            },
-            "title": "Risk Drivers",
-            "type": "array"
-          },
           "safety_stock": {
             "title": "Safety Stock",
             "type": "number"
@@ -1221,30 +1397,6 @@
           "station_id": {
             "title": "Station Id",
             "type": "string"
-          },
-          "time_to_safety_breach_ticks": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Ticks from the snapshot to the first safety-stock breach.",
-            "title": "Time To Safety Breach Ticks"
-          },
-          "time_to_stockout_ticks": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Ticks from the snapshot to projected zero inventory.",
-            "title": "Time To Stockout Ticks"
           }
         },
         "required": [
@@ -1257,82 +1409,11 @@
           "projected_inventory_at_arrival",
           "projected_safety_breach_tick",
           "projected_stockout_tick",
-          "time_to_safety_breach_ticks",
-          "time_to_stockout_ticks",
-          "projected_shortage_liters",
-          "minimum_projected_inventory",
-          "coverage_ticks",
-          "coverage_hours",
           "earliest_arrival_tick",
           "redundancy",
-          "risk_drivers",
           "reason"
         ],
         "title": "RiskAssessment",
-        "type": "object"
-      },
-      "RiskDriver": {
-        "properties": {
-          "code": {
-            "enum": [
-              "SAFETY_STOCK_BREACH",
-              "STOCKOUT_BEFORE_ARRIVAL",
-              "CONNECTIVITY_RISK",
-              "SINGLE_SOURCE",
-              "STATION_OUTAGE",
-              "SCARCITY_LIMITED",
-              "ROUTE_DISRUPTED",
-              "FUEL_SCARCITY",
-              "PROJECTED_SHORTAGE",
-              "DEMAND_PRESSURE",
-              "INCOMING_SUPPLY"
-            ],
-            "title": "Code",
-            "type": "string"
-          },
-          "detail": {
-            "title": "Detail",
-            "type": "string"
-          },
-          "threshold": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Threshold"
-          },
-          "unit": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Unit"
-          },
-          "value": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Value"
-          }
-        },
-        "required": [
-          "code",
-          "detail"
-        ],
-        "title": "RiskDriver",
         "type": "object"
       },
       "Route": {
@@ -1380,6 +1461,20 @@
       "RunInfo": {
         "description": "Simulator `/v1/instance`.",
         "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
           "scenario_id": {
             "title": "Scenario Id",
             "type": "string"
@@ -1761,6 +1856,16 @@
       },
       "Trip": {
         "properties": {
+          "classification": {
+            "default": "HARD",
+            "enum": [
+              "HARD",
+              "SOFT",
+              "INFO"
+            ],
+            "title": "Classification",
+            "type": "string"
+          },
           "code": {
             "enum": [
               "SNAPSHOT_STALE",
@@ -1774,7 +1879,9 @@
               "STATION_UNREACHABLE",
               "FORECAST_DRIFT",
               "PRIMARY_PLANNER_FAILED",
-              "STATE_SYNC_SUSPECT"
+              "STATE_SYNC_SUSPECT",
+              "KILL_SWITCH_ON",
+              "SSE_DISCONNECTED"
             ],
             "title": "Code",
             "type": "string"
@@ -1930,11 +2037,29 @@
       },
       "put": {
         "operationId": "set_automation_api_automation_put",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AutomationState"
+                "$ref": "#/components/schemas/AutomationUpdateRequest"
               }
             }
           },
@@ -1968,9 +2093,185 @@
         ]
       }
     },
+    "/api/automation/kill-switch": {
+      "post": {
+        "operationId": "engage_kill_switch_api_automation_kill_switch_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KillSwitchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutomationState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Engage Kill Switch",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/api/automation/kill-switch/clear": {
+      "post": {
+        "operationId": "clear_kill_switch_api_automation_kill_switch_clear_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KillSwitchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutomationState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clear Kill Switch",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/api/automation/rearm": {
+      "post": {
+        "operationId": "rearm_api_automation_rearm_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KillSwitchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutomationState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rearm",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
     "/api/dashboard": {
       "get": {
-        "description": "One poll for the whole operator screen. Degrades instead of failing.",
         "operationId": "dashboard_api_dashboard_get",
         "responses": {
           "200": {
@@ -1985,6 +2286,400 @@
           }
         },
         "summary": "Dashboard",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/api/demo/event": {
+      "post": {
+        "operationId": "demo_event_api_demo_event_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DemoEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Demo Event Api Demo Event Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Demo Event",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/api/demo/fault": {
+      "post": {
+        "operationId": "demo_fault_api_demo_fault_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DemoFaultRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Demo Fault Api Demo Fault Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Demo Fault",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/api/demo/faults/clear": {
+      "post": {
+        "operationId": "demo_clear_faults_api_demo_faults_clear_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DemoClearRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Demo Clear Faults Api Demo Faults Clear Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Demo Clear Faults",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/api/demo/pause": {
+      "post": {
+        "operationId": "demo_pause_api_demo_pause_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Demo Pause Api Demo Pause Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Demo Pause",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/api/demo/reset": {
+      "post": {
+        "operationId": "demo_reset_api_demo_reset_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Demo Reset Api Demo Reset Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Demo Reset",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/api/demo/run": {
+      "post": {
+        "operationId": "demo_run_api_demo_run_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Demo Run Api Demo Run Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Demo Run",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/api/demo/step": {
+      "post": {
+        "operationId": "demo_step_api_demo_step_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Demo Step Api Demo Step Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Demo Step",
         "tags": [
           "operations"
         ]
@@ -2079,8 +2774,41 @@
               "title": "Recommendation Id",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ApprovalRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -2092,16 +2820,6 @@
             },
             "description": "Successful Response"
           },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
           "422": {
             "content": {
               "application/json": {
@@ -2111,16 +2829,6 @@
               }
             },
             "description": "Validation Error"
-          },
-          "501": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            },
-            "description": "Not Implemented"
           }
         },
         "summary": "Approve",
@@ -2140,6 +2848,22 @@
             "schema": {
               "title": "Recommendation Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
             }
           }
         ],
@@ -2163,16 +2887,6 @@
               }
             },
             "description": "Validation Error"
-          },
-          "501": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            },
-            "description": "Not Implemented"
           }
         },
         "summary": "Reject",
@@ -2183,8 +2897,25 @@
     },
     "/api/sim/control": {
       "post": {
-        "description": "Demo controls proxied to simulator /admin/*. Never used by planning logic.",
         "operationId": "sim_control_api_sim_control_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -2217,26 +2948,6 @@
               }
             },
             "description": "Validation Error"
-          },
-          "501": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            },
-            "description": "Not Implemented"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            },
-            "description": "Bad Gateway"
           }
         },
         "summary": "Sim Control",
