@@ -6,11 +6,13 @@ and alpha is calibrated on recent observed demand_liters (not served_liters).
 """
 
 from collections import defaultdict
+from collections.abc import Sequence
 from datetime import timedelta
 
 from app.domain.models import (
     FUEL_TYPES,
     Allocation,
+    DemandObservation,
     Forecast,
     FuelType,
     InventoryProjection,
@@ -19,6 +21,9 @@ from app.domain.models import (
     ProjectionPoint,
     Station,
 )
+
+# Alpha is clamped so one noisy window cannot swing the plan wildly.
+ALPHA_MIN, ALPHA_MAX = 0.5, 2.0
 
 # Liters per simulated day (guide §8.5).
 DAILY_DEMAND: dict[str, dict[FuelType, float]] = {
@@ -42,14 +47,69 @@ def hour_factor(profile: str, hour: int) -> float:
     return 1.0
 
 
-def structural_demand(state: NetworkState, station: Station, fuel: FuelType, tick: int) -> float:
-    """Expected liters in one tick before calibration."""
+def structural_demand(state: NetworkState, station: Station, fuel: FuelType, tick: int, multiplier: float | None = None) -> float:
+    """Expected liters in one tick before calibration. `multiplier` overrides the station's live demand_multiplier."""
     run = state.run
     ticks_per_day = 24 * 60 / run.tick_minutes
     sim_time = run.sim_time + timedelta(minutes=(tick - run.tick) * run.tick_minutes)
     region_factor = next((r.demand_factor for r in state.regions if r.id == station.region_id), 1.0)
     daily = DAILY_DEMAND.get(station.demand_profile, {}).get(fuel, 0.0)
-    return daily / ticks_per_day * hour_factor(station.demand_profile, sim_time.hour) * region_factor * station.demand_multiplier
+    live = station.demand_multiplier if multiplier is None else multiplier
+    return daily / ticks_per_day * hour_factor(station.demand_profile, sim_time.hour) * region_factor * live
+
+
+def _spike_factor(state: NetworkState, station: Station, tick: int) -> float:
+    """Product of demand_spike multipliers covering this station's region at `tick`."""
+    factor = 1.0
+    for event in state.events:
+        if event.type != "demand_spike" or not event.start_tick <= tick < event.end_tick:
+            continue
+        if station.region_id in event.parameters.get("region_ids", []):
+            factor *= float(event.parameters.get("multiplier", 1.0))
+    return factor
+
+
+def multiplier_at(state: NetworkState, station: Station, tick: int) -> float:
+    """Demand multiplier the station had at a past `tick`.
+
+    The live `demand_multiplier` already includes any spike active now. Divide that out and apply the spikes that
+    were active at `tick`, so calibration is not skewed by a spike that started (or ended) inside the window.
+    With no matching spike events this is just the live multiplier.
+    """
+    now = _spike_factor(state, station, state.run.tick)
+    base = station.demand_multiplier / now if now > 0 else station.demand_multiplier
+    return base * _spike_factor(state, station, tick)
+
+
+def calibrate_alpha(state: NetworkState, station: Station, fuel: FuelType, observed: Sequence[DemandObservation]) -> float:
+    """Ratio of observed demand_liters to structural demand over `observed`, clamped; 1.0 with no usable data."""
+    expected = sum(structural_demand(state, station, fuel, o.tick, multiplier_at(state, station, o.tick)) for o in observed)
+    if not observed or expected <= 0:
+        return 1.0
+    return min(max(sum(o.demand_liters for o in observed) / expected, ALPHA_MIN), ALPHA_MAX)
+
+
+def forecast_error_mape(
+    state: NetworkState, station: Station, fuel: FuelType, observed: Sequence[DemandObservation], policy: Policy
+) -> tuple[float | None, int]:
+    """One-step-ahead backtest over the last `forecast_error_ticks` observations: (MAPE, ticks scored).
+
+    Each tick is predicted with an alpha calibrated only on the observations before it, so the error is out of sample.
+    Ticks with zero observed demand are skipped (percentage error is undefined). Returns (None, 0) when nothing can be scored.
+    """
+    errors: list[float] = []
+    first = max(len(observed) - policy.forecast_error_ticks, 1)
+    for i in range(first, len(observed)):
+        actual = observed[i].demand_liters
+        if actual <= 0:
+            continue
+        alpha = calibrate_alpha(state, station, fuel, observed[max(i - policy.history_calibration_ticks, 0) : i])
+        tick = observed[i].tick
+        predicted = structural_demand(state, station, fuel, tick, multiplier_at(state, station, tick)) * alpha
+        errors.append(abs(predicted - actual) / actual)
+    if not errors:
+        return None, 0
+    return round(sum(errors) / len(errors), 4), len(errors)
 
 
 def forecast_demand(state: NetworkState, policy: Policy) -> list[Forecast]:
@@ -62,23 +122,22 @@ def forecast_demand(state: NetworkState, policy: Policy) -> list[Forecast]:
     start = state.run.tick + 1
     for station in state.stations:
         for fuel in FUEL_TYPES:
-            recent = sorted(history[(station.id, fuel)], key=lambda o: o.tick)[-policy.history_calibration_ticks :]
-            observed = sum(o.demand_liters for o in recent)
-            # Uses today's demand_multiplier for past ticks; a spike that just started skews alpha. TODO(dev2).
-            expected = sum(structural_demand(state, station, fuel, o.tick) for o in recent)
-            # Clamp so one noisy window cannot swing the plan wildly.
-            alpha = min(max(observed / expected, 0.5), 2.0) if recent and expected > 0 else 1.0
+            observed = sorted(history[(station.id, fuel)], key=lambda o: o.tick)
+            recent = observed[-policy.history_calibration_ticks :]
+            alpha = calibrate_alpha(state, station, fuel, recent)
+            mape, scored = forecast_error_mape(state, station, fuel, observed, policy)
             forecasts.append(
                 Forecast(
                     station_id=station.id,
                     fuel_type=fuel,
                     start_tick=start,
                     liters_per_tick=[
-                        round(structural_demand(state, station, fuel, t) * alpha, 3)
-                        for t in range(start, start + policy.horizon_ticks)
+                        round(structural_demand(state, station, fuel, t) * alpha, 3) for t in range(start, start + policy.horizon_ticks)
                     ],
                     calibration=round(alpha, 4),
                     method="structural+calibrated" if recent else "structural",
+                    error_mape=mape,
+                    error_ticks=scored,
                 )
             )
     return forecasts

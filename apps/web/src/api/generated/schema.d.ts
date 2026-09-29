@@ -443,6 +443,17 @@ export interface components {
              */
             calibration: number;
             /**
+             * Error Mape
+             * @description Mean absolute percentage error of one-step-ahead backtest forecasts vs observed demand_liters; null if nothing scoreable.
+             */
+            error_mape?: number | null;
+            /**
+             * Error Ticks
+             * @description Observed ticks scored in error_mape.
+             * @default 0
+             */
+            error_ticks: number;
+            /**
              * Fuel Type
              * @enum {string}
              */
@@ -642,7 +653,7 @@ export interface components {
             current_inventory: number;
             /**
              * Earliest Arrival Tick
-             * @description Earliest tick a new shipment could land; null if unreachable.
+             * @description Earliest tick a new shipment could land; null if unreachable or no depot has stock.
              */
             earliest_arrival_tick: number | null;
             /**
@@ -650,6 +661,16 @@ export interface components {
              * @enum {string}
              */
             fuel_type: "DIESEL" | "PETROL" | "OCTANE";
+            /**
+             * Hours To Safety Breach
+             * @description Simulated hours from now to projected_safety_breach_tick; null if none in the horizon.
+             */
+            hours_to_safety_breach?: number | null;
+            /**
+             * Hours To Stockout
+             * @description Simulated hours from now to projected_stockout_tick; null if none in the horizon.
+             */
+            hours_to_stockout?: number | null;
             /**
              * Level
              * @enum {string}

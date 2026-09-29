@@ -3,7 +3,7 @@ Owner: Developer 2 (intelligence).
 """
 
 from app.domain.models import InventoryProjection, NetworkState, ReasonCode, RiskAssessment
-from app.intelligence.topology import arrival_tick, disrupted_routes, feasible_routes
+from app.intelligence.topology import arrival_tick, disrupted_routes, feasible_routes, open_routes
 
 LEVEL_ORDER = {"CRITICAL": 0, "HIGH": 1, "WATCH": 2, "OK": 3}
 
@@ -11,6 +11,7 @@ LEVEL_ORDER = {"CRITICAL": 0, "HIGH": 1, "WATCH": 2, "OK": 3}
 def assess_risk(state: NetworkState, projections: list[InventoryProjection]) -> list[RiskAssessment]:
     """Most urgent first."""
     stations = {s.id: s for s in state.stations}
+    hours_per_tick = state.run.tick_minutes / 60
     risks: list[RiskAssessment] = []
 
     for proj in projections:
@@ -20,11 +21,7 @@ def assess_risk(state: NetworkState, projections: list[InventoryProjection]) -> 
         stockout = next((p.tick for p in proj.points if p.inventory <= 0), None)
         routes = feasible_routes(state, proj.station_id, proj.fuel_type)
         arrival = arrival_tick(state, routes[0]) if routes else None
-        at_arrival = (
-            next((p.inventory for p in proj.points if p.tick >= arrival), proj.points[-1].inventory)
-            if arrival is not None
-            else None
-        )
+        at_arrival = next((p.inventory for p in proj.points if p.tick >= arrival), proj.points[-1].inventory) if arrival is not None else None
 
         codes: list[ReasonCode] = []
         if station.status == "OUTAGE":
@@ -42,9 +39,12 @@ def assess_risk(state: NetworkState, projections: list[InventoryProjection]) -> 
             level, reason = "OK", "Projected inventory stays above safety stock over the horizon."
 
         if level != "OK":
-            if not routes:
+            if not open_routes(state, proj.station_id):
                 codes.append("CONNECTIVITY_RISK")
-                reason += " No feasible route: unreachable, not just scarce."
+                reason += " No open route: the station is unreachable, not just short of fuel."
+            elif not routes:
+                codes.append("SCARCITY_LIMITED")
+                reason += " Routes are open but no depot holds this fuel: scarce, not unreachable."
             elif len(routes) == 1:
                 codes.append("SINGLE_SOURCE")
             if disrupted_routes(state, proj.station_id):
@@ -61,6 +61,8 @@ def assess_risk(state: NetworkState, projections: list[InventoryProjection]) -> 
                 projected_inventory_at_arrival=at_arrival,
                 projected_safety_breach_tick=breach,
                 projected_stockout_tick=stockout,
+                hours_to_safety_breach=None if breach is None else round((breach - state.run.tick) * hours_per_tick, 2),
+                hours_to_stockout=None if stockout is None else round((stockout - state.run.tick) * hours_per_tick, 2),
                 earliest_arrival_tick=arrival,
                 redundancy=len(routes),
                 reason=reason,
