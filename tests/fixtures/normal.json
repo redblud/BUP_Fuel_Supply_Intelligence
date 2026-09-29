@@ -1,0 +1,258 @@
+{
+ "health": {
+  "status": "ok",
+  "database": "ok",
+  "simulation": {
+   "status": "PAUSED",
+   "tick": 0
+  }
+ },
+ "instance": {
+  "id": 1,
+  "scenario_id": "baseline",
+  "scenario_version": "1.0",
+  "seed": 12345,
+  "sim_time": "2026-01-01T00:00:00+00:00",
+  "tick": 0,
+  "tick_minutes": 15,
+  "status": "PAUSED"
+ },
+ "regions": [
+  {
+   "id": "region-dhaka",
+   "name": "Dhaka Division",
+   "demand_factor": 1.0
+  },
+  {
+   "id": "region-chattogram",
+   "name": "Chattogram Division",
+   "demand_factor": 1.08
+  }
+ ],
+ "depots": [
+  {
+   "id": "depot-gazipur",
+   "name": "Gazipur Depot",
+   "region_id": "region-dhaka",
+   "status": "OPEN",
+   "dispatch_capacity_per_tick": 12000,
+   "capacity": {
+    "DIESEL": 90000,
+    "PETROL": 70000,
+    "OCTANE": 45000
+   },
+   "inventory": {
+    "DIESEL": 60000,
+    "PETROL": 45000,
+    "OCTANE": 26000
+   }
+  },
+  {
+   "id": "depot-patiya",
+   "name": "Patiya Depot",
+   "region_id": "region-chattogram",
+   "status": "OPEN",
+   "dispatch_capacity_per_tick": 11000,
+   "capacity": {
+    "DIESEL": 85000,
+    "PETROL": 65000,
+    "OCTANE": 40000
+   },
+   "inventory": {
+    "DIESEL": 55000,
+    "PETROL": 42000,
+    "OCTANE": 24000
+   }
+  }
+ ],
+ "stations": [
+  {
+   "id": "station-mirpur",
+   "name": "Mirpur Fuel Station",
+   "region_id": "region-dhaka",
+   "status": "OPEN",
+   "demand_profile": "urban_high",
+   "demand_multiplier": 1.0,
+   "capacity": {
+    "DIESEL": 15000,
+    "PETROL": 14000,
+    "OCTANE": 9000
+   },
+   "inventory": {
+    "DIESEL": 9000,
+    "PETROL": 9000,
+    "OCTANE": 5000
+   }
+  },
+  {
+   "id": "station-tongi",
+   "name": "Tongi Fuel Station",
+   "region_id": "region-dhaka",
+   "status": "OPEN",
+   "demand_profile": "industrial",
+   "demand_multiplier": 1.0,
+   "capacity": {
+    "DIESEL": 18000,
+    "PETROL": 9000,
+    "OCTANE": 6000
+   },
+   "inventory": {
+    "DIESEL": 11000,
+    "PETROL": 6000,
+    "OCTANE": 3500
+   }
+  },
+  {
+   "id": "station-karnaphuli",
+   "name": "Karnaphuli Fuel Station",
+   "region_id": "region-chattogram",
+   "status": "OPEN",
+   "demand_profile": "highway",
+   "demand_multiplier": 1.0,
+   "capacity": {
+    "DIESEL": 14000,
+    "PETROL": 15000,
+    "OCTANE": 9000
+   },
+   "inventory": {
+    "DIESEL": 8500,
+    "PETROL": 9500,
+    "OCTANE": 5200
+   }
+  },
+  {
+   "id": "station-coxsbazar",
+   "name": "Cox's Bazar Fuel Station",
+   "region_id": "region-chattogram",
+   "status": "OPEN",
+   "demand_profile": "regional",
+   "demand_multiplier": 1.0,
+   "capacity": {
+    "DIESEL": 12000,
+    "PETROL": 12000,
+    "OCTANE": 7000
+   },
+   "inventory": {
+    "DIESEL": 7500,
+    "PETROL": 7500,
+    "OCTANE": 4200
+   }
+  }
+ ],
+ "routes": [
+  {
+   "id": "route-gazipur-mirpur",
+   "source_depot_id": "depot-gazipur",
+   "destination_station_id": "station-mirpur",
+   "transit_ticks": 2,
+   "max_shipment": 7000,
+   "status": "AVAILABLE"
+  },
+  {
+   "id": "route-gazipur-tongi",
+   "source_depot_id": "depot-gazipur",
+   "destination_station_id": "station-tongi",
+   "transit_ticks": 2,
+   "max_shipment": 6500,
+   "status": "AVAILABLE"
+  },
+  {
+   "id": "route-patiya-karnaphuli",
+   "source_depot_id": "depot-patiya",
+   "destination_station_id": "station-karnaphuli",
+   "transit_ticks": 2,
+   "max_shipment": 7000,
+   "status": "AVAILABLE"
+  },
+  {
+   "id": "route-patiya-coxsbazar",
+   "source_depot_id": "depot-patiya",
+   "destination_station_id": "station-coxsbazar",
+   "transit_ticks": 3,
+   "max_shipment": 6000,
+   "status": "AVAILABLE"
+  },
+  {
+   "id": "route-gazipur-karnaphuli",
+   "source_depot_id": "depot-gazipur",
+   "destination_station_id": "station-karnaphuli",
+   "transit_ticks": 4,
+   "max_shipment": 5000,
+   "status": "AVAILABLE"
+  },
+  {
+   "id": "route-patiya-mirpur",
+   "source_depot_id": "depot-patiya",
+   "destination_station_id": "station-mirpur",
+   "transit_ticks": 4,
+   "max_shipment": 5000,
+   "status": "AVAILABLE"
+  }
+ ],
+ "supply-arrivals": [
+  {
+   "id": "supply-001",
+   "depot_id": "depot-gazipur",
+   "fuel_type": "DIESEL",
+   "quantity": 18000,
+   "planned_tick": 12,
+   "actual_tick": null,
+   "status": "SCHEDULED"
+  },
+  {
+   "id": "supply-002",
+   "depot_id": "depot-patiya",
+   "fuel_type": "DIESEL",
+   "quantity": 16000,
+   "planned_tick": 14,
+   "actual_tick": null,
+   "status": "SCHEDULED"
+  },
+  {
+   "id": "supply-003",
+   "depot_id": "depot-gazipur",
+   "fuel_type": "PETROL",
+   "quantity": 15000,
+   "planned_tick": 16,
+   "actual_tick": null,
+   "status": "SCHEDULED"
+  },
+  {
+   "id": "supply-004",
+   "depot_id": "depot-patiya",
+   "fuel_type": "PETROL",
+   "quantity": 14000,
+   "planned_tick": 20,
+   "actual_tick": null,
+   "status": "SCHEDULED"
+  },
+  {
+   "id": "supply-005",
+   "depot_id": "depot-gazipur",
+   "fuel_type": "DIESEL",
+   "quantity": 22000,
+   "planned_tick": 76,
+   "actual_tick": null,
+   "status": "SCHEDULED"
+  },
+  {
+   "id": "supply-006",
+   "depot_id": "depot-patiya",
+   "fuel_type": "PETROL",
+   "quantity": 20000,
+   "planned_tick": 84,
+   "actual_tick": null,
+   "status": "SCHEDULED"
+  }
+ ],
+ "events": [],
+ "allocations": [],
+ "demand-history": [],
+ "metrics": {
+  "served_demand_liters": 0.0,
+  "unmet_demand_liters": 0.0,
+  "service_level": 1.0,
+  "allocation_liters": 0,
+  "allocation_failures": 0
+ }
+}
