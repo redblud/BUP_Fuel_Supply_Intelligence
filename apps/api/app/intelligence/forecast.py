@@ -70,11 +70,13 @@ def _spike_factor(state: NetworkState, station: Station, tick: int) -> float:
 
 
 def multiplier_at(state: NetworkState, station: Station, tick: int) -> float:
-    """Demand multiplier the station had at a past `tick`.
+    """Demand multiplier the station has, or had, or is scheduled to have, at `tick`.
 
     The live `demand_multiplier` already includes any spike active now. Divide that out and apply the spikes that
-    were active at `tick`, so calibration is not skewed by a spike that started (or ended) inside the window.
-    With no matching spike events this is just the live multiplier.
+    are active at `tick` by their start_tick/end_tick, whatever their status. That keeps calibration from being skewed
+    by a spike that started or ended inside the window, and lets the forecast see a SCHEDULED spike coming and an
+    active one ending. Assumes a spike reverts at its end_tick (unverified against the live simulator). With no
+    matching spike events this is just the live multiplier.
     """
     now = _spike_factor(state, station, state.run.tick)
     base = station.demand_multiplier / now if now > 0 else station.demand_multiplier
@@ -132,7 +134,8 @@ def forecast_demand(state: NetworkState, policy: Policy) -> list[Forecast]:
                     fuel_type=fuel,
                     start_tick=start,
                     liters_per_tick=[
-                        round(structural_demand(state, station, fuel, t) * alpha, 3) for t in range(start, start + policy.horizon_ticks)
+                        round(structural_demand(state, station, fuel, t, multiplier_at(state, station, t)) * alpha, 3)
+                        for t in range(start, start + policy.horizon_ticks)
                     ],
                     calibration=round(alpha, 4),
                     method="structural+calibrated" if recent else "structural",
