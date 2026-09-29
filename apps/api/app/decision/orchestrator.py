@@ -11,6 +11,7 @@ import logging
 from app.api.deps import AppContext
 from app.domain.models import NetworkState, Plan, Recommendation, RecommendationState, TripwireStatus
 from app.intelligence import build_plan
+from app.persistence import repository
 from app.safety import tripwire
 from app.simulator.errors import SimulatorError
 
@@ -72,12 +73,16 @@ def refusal_reason(rec: Recommendation | None, trip: TripwireStatus, kill_switch
     return None
 
 
-async def _persist(ctx: AppContext, st: RecommendationState, note: str) -> None:
-    """Keep the lifecycle in memory and audit it. A failing database is surfaced as PERSISTENCE_FAILURE, never a crash."""
+async def _persist(
+    ctx: AppContext, st: RecommendationState, note: str, *, run_id: str | None = None, key: str | None = None, body: str | None = None
+) -> None:
+    """Keep the lifecycle in memory, store it durably, and audit it. A failing database is surfaced as PERSISTENCE_FAILURE, never a crash."""
     ctx.recommendation_states = {**ctx.recommendation_states, st.recommendation_id: st}
     log.info(note, extra={"component": "decision", "decision_id": st.recommendation_id, "allocation_id": st.allocation_id})
     try:
         await ctx.db.record("decision", json.dumps({"note": note, **st.model_dump()}))
+        if run_id is not None:
+            await repository.save_intent(ctx.db, st, run_id=run_id, idempotency_key=key, request_body=body)
     except Exception as exc:  # noqa: BLE001
         ctx.state.persistence_error = f"{type(exc).__name__}: {exc}"
         log.error("audit write failed", extra={"component": "persistence", "error_code": "PERSISTENCE_FAILURE"})
@@ -121,10 +126,19 @@ async def approve(ctx: AppContext, recommendation_id: str) -> RecommendationStat
         if seen is not None:  # the simulator already has it: adopt it, never POST again
             done = RecommendationState(recommendation_id=rec.id, status="DONE", updated_tick=state.run.tick, allocation_id=seen.allocation.id,
                                        message="Already created on the simulator.")
-            await _persist(ctx, done, "adopted")
+            await _persist(ctx, done, "adopted", run_id=state.meta.run_id)
             return done
-        await _persist(ctx, RecommendationState(recommendation_id=rec.id, status="EXECUTING", updated_tick=state.run.tick), "executing")
-        body = {**rec.request.model_dump(), "idempotency_key": key}
+        stored = await repository.load_intent_body(ctx.db, rec.id) if retrying else None
+        if stored is not None:  # replay the exact body and key that were prepared, never a rebuilt one
+            key, raw = stored
+            body = json.loads(raw)
+        else:
+            body = {**rec.request.model_dump(), "idempotency_key": key}
+            raw = json.dumps(body, sort_keys=True)
+        prepared = RecommendationState(recommendation_id=rec.id, status="EXECUTING", updated_tick=state.run.tick, message="PREPARED")
+        await _persist(ctx, prepared, "prepared", run_id=state.meta.run_id, key=key, body=raw)
+        if ctx.state.persistence_error:  # the intent must be durable before anything is sent
+            raise DecisionError("PERSISTENCE_FAILURE", "Could not store the execution intent; not sending.", 503)
         error: SimulatorError | None = None
         for _ in range(2):  # one retry, same key and body
             ctx.counters["allocation_attempts"] += 1
@@ -139,15 +153,16 @@ async def approve(ctx: AppContext, recommendation_id: str) -> RecommendationStat
                 continue
             done = RecommendationState(recommendation_id=rec.id, status="DONE", updated_tick=state.run.tick, allocation_id=alloc.id,
                                        message=f"Allocation {alloc.id} {alloc.status}.")
-            await _persist(ctx, done, "executed")
+            await _persist(ctx, done, "executed", run_id=state.meta.run_id)
             return done
         assert error is not None
         if error.retryable:
             message = f"{UNKNOWN_PREFIX}: {error}. Confirm on the simulator, then approve again (same key)."
             await _persist(ctx, RecommendationState(recommendation_id=rec.id, status="EXECUTING", updated_tick=state.run.tick, message=message),
-                           "unknown")
+                           "unknown", run_id=state.meta.run_id)
             raise DecisionError("EXECUTION_UNKNOWN", message, 502)
-        await _persist(ctx, RecommendationState(recommendation_id=rec.id, status="FAILED", updated_tick=state.run.tick, message=str(error)), "failed")
+        await _persist(ctx, RecommendationState(recommendation_id=rec.id, status="FAILED", updated_tick=state.run.tick, message=str(error)), "failed",
+                       run_id=state.meta.run_id)
         raise DecisionError(error.code, error.message, 502)
 
 
@@ -161,5 +176,6 @@ async def reject(ctx: AppContext, recommendation_id: str) -> RecommendationState
     if st.status != "PROPOSED":
         raise DecisionError("NOT_REJECTABLE", f"Recommendation is {st.status}.")
     out = st.model_copy(update={"status": "REJECTED", "message": "Rejected by the operator."})
-    await _persist(ctx, out, "rejected")
+    latest = ctx.state.latest
+    await _persist(ctx, out, "rejected", run_id=latest.meta.run_id if latest else None)
     return out
