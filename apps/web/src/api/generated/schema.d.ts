@@ -188,7 +188,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approve */
+        /**
+         * Approve
+         * @description Revalidate on a fresh snapshot, check kill switch, Tripwire and expiry, then execute once (idempotent).
+         */
         post: operations["approve_api_recommendations__recommendation_id__approve_post"];
         delete?: never;
         options?: never;
@@ -205,7 +208,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reject */
+        /**
+         * Reject
+         * @description Decline a proposed recommendation.
+         */
         post: operations["reject_api_recommendations__recommendation_id__reject_post"];
         delete?: never;
         options?: never;
@@ -1022,6 +1028,15 @@ export interface operations {
                     "application/json": components["schemas"]["AutomationState"];
                 };
             };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -1259,6 +1274,15 @@ export interface operations {
                     "application/json": components["schemas"]["RecommendationState"];
                 };
             };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
             /** @description Conflict */
             409: {
                 headers: {
@@ -1277,8 +1301,17 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description Not Implemented */
-            501: {
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1308,6 +1341,24 @@ export interface operations {
                     "application/json": components["schemas"]["RecommendationState"];
                 };
             };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -1315,15 +1366,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-            /** @description Not Implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
                 };
             };
         };

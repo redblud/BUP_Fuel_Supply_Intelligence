@@ -33,7 +33,8 @@ async def system_health(ctx: AppContext) -> SystemHealth:
         status={"connected": "HEALTHY", "reconnecting": "DEGRADED", "connecting": "DEGRADED"}.get(sse, "UNKNOWN"),
         detail="not used in fixture mode" if sse == "disabled" else f"{sse} · latest tick {ctx.state.latest_sse_tick}",
     )
-    c["execution"] = ComponentHealth(status="UNKNOWN", detail="not implemented")
+    unclear = sum(1 for st in ctx.recommendation_states.values() if st.status == "EXECUTING" and (st.message or "").startswith("EXECUTION_UNKNOWN"))
+    c["execution"] = ComponentHealth(status="DEGRADED" if unclear else "HEALTHY", detail=f"{unclear} unclear execution(s)" if unclear else "ready")
     worst = max(c.values(), key=lambda h: RANK[h.status]).status
     return SystemHealth(status="HEALTHY" if worst == "UNKNOWN" else worst, components=c)
 

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.deps import AppContext, get_ctx
 from app.api.routes.health import system_health
+from app.decision import orchestrator
 from app.domain.models import (
     AutomationState,
     ComponentHealth,
@@ -59,7 +60,10 @@ async def dashboard(ctx: AppContext = Depends(get_ctx)) -> DashboardResponse:
         status="HEALTHY" if state and state.meta.freshness in ("FRESH", "FIXTURE") else "DOWN" if state is None else "DEGRADED",
         detail=state.meta.freshness if state else "UNAVAILABLE",
     )
-    trip = tripwire.evaluate(state, plan, str(ctx.state.last_error) if ctx.state.last_error else None)
+    if plan is not None:
+        ctx.recommendation_states = orchestrator.sync_lifecycle(ctx.recommendation_states, plan)
+    unknown = sum(1 for st in ctx.recommendation_states.values() if orchestrator.is_unknown(st))
+    trip = tripwire.evaluate(state, plan, str(ctx.state.last_error) if ctx.state.last_error else None, unknown_executions=unknown)
     health.components["tripwire"] = ComponentHealth(status="HEALTHY" if trip.state == "CLEAR" else "DEGRADED", detail=trip.state)
 
     trusted = ctx.state.last_trusted
@@ -80,27 +84,47 @@ async def get_automation(ctx: AppContext = Depends(get_ctx)) -> AutomationState:
     return ctx.automation
 
 
-@router.put("/automation", response_model=AutomationState)
+@router.put("/automation", response_model=AutomationState, responses={409: {"model": ErrorBody}})
 async def set_automation(body: AutomationState, ctx: AppContext = Depends(get_ctx)) -> AutomationState:
-    # TODO(dev4): persist + audit; GUARDED_AUTO must refuse while the Tripwire is TRIPPED.
+    if body.mode == "GUARDED_AUTO":
+        state = await ctx.state.snapshot()
+        plan = build_plan(state) if state is not None else None
+        trip = tripwire.evaluate(state, plan, str(ctx.state.last_error) if ctx.state.last_error else None)
+        if trip.state == "TRIPPED":
+            raise HTTPException(409, detail={"code": "TRIPWIRE_TRIPPED", "message": "GUARDED_AUTO is refused while the safety guard is tripped."})
     ctx.automation = body
     await ctx.db.record("automation", body.model_dump_json())
     return ctx.automation
 
 
+def _refuse(exc: orchestrator.DecisionError) -> HTTPException:
+    return HTTPException(exc.status, detail={"code": exc.code, "message": exc.message})
+
+
 @router.post(
     "/recommendations/{recommendation_id}/approve",
     response_model=RecommendationState,
-    responses={501: {"model": ErrorBody}, 409: {"model": ErrorBody}},
+    responses={404: {"model": ErrorBody}, 409: {"model": ErrorBody}, 502: {"model": ErrorBody}, 503: {"model": ErrorBody}},
 )
 async def approve(recommendation_id: str, ctx: AppContext = Depends(get_ctx)) -> RecommendationState:
-    # TODO(dev4): revalidate against a fresh snapshot, check Tripwire + expiry, depot lock, idempotent POST.
-    raise HTTPException(501, detail={"code": "NOT_IMPLEMENTED", "message": "Supervised execution is not built yet."})
+    """Revalidate on a fresh snapshot, check kill switch, Tripwire and expiry, then execute once (idempotent)."""
+    try:
+        return await orchestrator.approve(ctx, recommendation_id)
+    except orchestrator.DecisionError as exc:
+        raise _refuse(exc) from exc
 
 
-@router.post("/recommendations/{recommendation_id}/reject", response_model=RecommendationState, responses={501: {"model": ErrorBody}})
+@router.post(
+    "/recommendations/{recommendation_id}/reject",
+    response_model=RecommendationState,
+    responses={404: {"model": ErrorBody}, 409: {"model": ErrorBody}},
+)
 async def reject(recommendation_id: str, ctx: AppContext = Depends(get_ctx)) -> RecommendationState:
-    raise HTTPException(501, detail={"code": "NOT_IMPLEMENTED", "message": "Recommendation lifecycle is not built yet."})
+    """Decline a proposed recommendation."""
+    try:
+        return await orchestrator.reject(ctx, recommendation_id)
+    except orchestrator.DecisionError as exc:
+        raise _refuse(exc) from exc
 
 
 @router.post("/sim/control", response_model=dict, responses={501: {"model": ErrorBody}, 502: {"model": ErrorBody}})

@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+import asyncio
+from dataclasses import dataclass, field
 
 from fastapi import Request
 
@@ -14,8 +15,8 @@ class AppContext:
     db: Database
     state: StateService
     automation: AutomationState
-    # TODO(dev4): move lifecycle into decision/lifecycle.py backed by SQLite.
     recommendation_states: dict[str, RecommendationState]
+    depot_locks: dict[str, asyncio.Lock] = field(default_factory=dict)
 
 
 def get_ctx(request: Request) -> AppContext:
