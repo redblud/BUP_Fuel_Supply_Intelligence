@@ -1,4 +1,5 @@
 import asyncio
+from collections import Counter
 from dataclasses import dataclass, field
 
 from fastapi import Request
@@ -17,6 +18,8 @@ class AppContext:
     automation: AutomationState
     recommendation_states: dict[str, RecommendationState]
     depot_locks: dict[str, asyncio.Lock] = field(default_factory=dict)
+    counters: Counter[str] = field(default_factory=Counter)
+    planner_seconds: float | None = None
 
 
 def get_ctx(request: Request) -> AppContext:

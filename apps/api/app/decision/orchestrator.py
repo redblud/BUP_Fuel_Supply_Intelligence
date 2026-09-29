@@ -73,13 +73,20 @@ def refusal_reason(rec: Recommendation | None, trip: TripwireStatus, kill_switch
 
 
 async def _persist(ctx: AppContext, st: RecommendationState, note: str) -> None:
+    """Keep the lifecycle in memory and audit it. A failing database is surfaced as PERSISTENCE_FAILURE, never a crash."""
     ctx.recommendation_states = {**ctx.recommendation_states, st.recommendation_id: st}
-    await ctx.db.record("decision", json.dumps({"note": note, **st.model_dump()}))
+    log.info(note, extra={"component": "decision", "decision_id": st.recommendation_id, "allocation_id": st.allocation_id})
+    try:
+        await ctx.db.record("decision", json.dumps({"note": note, **st.model_dump()}))
+    except Exception as exc:  # noqa: BLE001
+        ctx.state.persistence_error = f"{type(exc).__name__}: {exc}"
+        log.error("audit write failed", extra={"component": "persistence", "error_code": "PERSISTENCE_FAILURE"})
 
 
 def _trip(ctx: AppContext, state: NetworkState, plan: Plan, ignore_unknown_for: str | None = None) -> TripwireStatus:
     unknown = sum(1 for s in ctx.recommendation_states.values() if is_unknown(s) and s.recommendation_id != ignore_unknown_for)
-    return tripwire.evaluate(state, plan, str(ctx.state.last_error) if ctx.state.last_error else None, unknown_executions=unknown)
+    return tripwire.evaluate(state, plan, str(ctx.state.last_error) if ctx.state.last_error else None, unknown_executions=unknown,
+                             persistence_error=ctx.state.persistence_error)
 
 
 async def approve(ctx: AppContext, recommendation_id: str) -> RecommendationState:
@@ -120,10 +127,13 @@ async def approve(ctx: AppContext, recommendation_id: str) -> RecommendationStat
         body = {**rec.request.model_dump(), "idempotency_key": key}
         error: SimulatorError | None = None
         for _ in range(2):  # one retry, same key and body
+            ctx.counters["allocation_attempts"] += 1
             try:
                 alloc = await ctx.state.client.create_allocation(body)
             except SimulatorError as exc:
                 error = exc
+                ctx.counters["allocation_conflicts" if exc.status == 409 else "allocation_failures"] += 1
+                log.warning("allocation rejected", extra={"component": "decision", "decision_id": rec.id, "error_code": exc.code})
                 if not exc.retryable:
                     break
                 continue

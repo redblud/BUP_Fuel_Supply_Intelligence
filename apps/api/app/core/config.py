@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     app_env: str = "development"
     log_level: str = "INFO"
+    log_format: Literal["json", "text"] = "json"
 
     # "fake" serves tests/fixtures/<fixture_scenario>.json; "real" talks to the BUP simulator.
     simulator_mode: Literal["fake", "real"] = "fake"

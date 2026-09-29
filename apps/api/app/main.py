@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.deps import AppContext
-from app.api.routes import health, history, operations
+from app.api.routes import health, history, metrics, operations
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.decision.auto import AutoRunner
@@ -31,7 +31,7 @@ def build_client(settings: Settings) -> SimulatorClient:
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
-    configure_logging(settings.log_level)
+    configure_logging(settings.log_level, settings.log_format)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -74,6 +74,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router)
     app.include_router(operations.router)
     app.include_router(history.router)
+    app.include_router(metrics.router)
     return app
 
 

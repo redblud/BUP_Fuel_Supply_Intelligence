@@ -156,3 +156,54 @@ def test_auto_step_does_nothing_when_tripped(api) -> None:
     ctx = c.app.state.ctx
     ctx.automation = ctx.automation.model_copy(update={"mode": "GUARDED_AUTO"})
     assert asyncio.run(auto_step(ctx)) == [] and sim.posts == []
+
+
+def test_database_failure_trips_persistence_and_freezes_execution(api, monkeypatch) -> None:
+    from app.state import service
+
+    c, sim = api()
+    rid = first_rec_id(c)
+
+    async def broken(*_a, **_k):
+        raise OSError("disk I/O error")
+
+    monkeypatch.setattr(service.repository, "record_allocation_transitions", broken)
+    dash = c.get("/api/dashboard").json()
+    assert dash["plan"]["recommendations"]  # advisory view still renders
+    assert "PERSISTENCE_FAILURE" in [t["code"] for t in dash["tripwire"]["trips"]]
+    r = c.post(f"/api/recommendations/{rid}/approve")
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "TRIPWIRE_TRIPPED"
+    assert sim.posts == []
+
+
+def test_metrics_endpoint_exposes_counters(api) -> None:
+    c, sim = api()
+    rid = first_rec_id(c)
+    c.post(f"/api/recommendations/{rid}/approve")
+    text = c.get("/metrics").text
+    assert "fuelops_allocation_attempts_total 1" in text
+    assert 'fuelops_recommendations{status="DONE"} 1' in text
+    assert "fuelops_planner_runtime_seconds" in text and "fuelops_snapshot_age_seconds" in text
+
+
+def test_planner_crash_falls_back_and_dashboard_renders(api, monkeypatch) -> None:
+    import app.intelligence as intelligence
+
+    c, _ = api()
+    monkeypatch.setattr(intelligence, "plan_replenishment", lambda *a, **k: 1 / 0)
+    dash = c.get("/api/dashboard").json()
+    assert dash["plan"]["planner_version"] == "fallback" and dash["plan"]["recommendations"] == []
+    assert "PRIMARY_PLANNER_FAILED" in [t["code"] for t in dash["tripwire"]["trips"]]
+    assert dash["health"]["components"]["planner"]["status"] == "DEGRADED"
+
+
+def test_json_log_carries_context_fields() -> None:
+    import json
+    import logging
+
+    from app.core.logging import JsonFormatter
+
+    rec = logging.LogRecord("x", logging.INFO, "f", 1, "executed", None, None)
+    rec.decision_id, rec.allocation_id, rec.component = "rec-1", 7, "decision"
+    out = json.loads(JsonFormatter().format(rec))
+    assert out["decision_id"] == "rec-1" and out["allocation_id"] == 7 and out["component"] == "decision" and "run_id" not in out

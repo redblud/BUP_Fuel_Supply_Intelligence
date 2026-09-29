@@ -1,6 +1,7 @@
 """Operator-facing API. The frontend reads only these endpoints."""
 
 import logging
+import time
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -48,7 +49,9 @@ async def dashboard(ctx: AppContext = Depends(get_ctx)) -> DashboardResponse:
     plan = None
     if state is not None:
         try:
+            started = time.perf_counter()
             plan = build_plan(state)
+            ctx.planner_seconds = time.perf_counter() - started
             health.components["forecast"] = ComponentHealth(status="HEALTHY")
             health.components["planner"] = ComponentHealth(
                 status="DEGRADED" if plan.planner_version == "fallback" else "HEALTHY", detail=plan.planner_version
@@ -63,7 +66,10 @@ async def dashboard(ctx: AppContext = Depends(get_ctx)) -> DashboardResponse:
     if plan is not None:
         ctx.recommendation_states = orchestrator.sync_lifecycle(ctx.recommendation_states, plan)
     unknown = sum(1 for st in ctx.recommendation_states.values() if orchestrator.is_unknown(st))
-    trip = tripwire.evaluate(state, plan, str(ctx.state.last_error) if ctx.state.last_error else None, unknown_executions=unknown)
+    trip = tripwire.evaluate(state, plan, str(ctx.state.last_error) if ctx.state.last_error else None, unknown_executions=unknown,
+                          persistence_error=ctx.state.persistence_error)
+    if state is not None and (state.meta.stale or state.meta.freshness not in ("FRESH", "FIXTURE")):
+        ctx.counters["snapshot_untrusted_polls"] += 1
     health.components["tripwire"] = ComponentHealth(status="HEALTHY" if trip.state == "CLEAR" else "DEGRADED", detail=trip.state)
 
     trusted = ctx.state.last_trusted
@@ -89,7 +95,8 @@ async def set_automation(body: AutomationState, ctx: AppContext = Depends(get_ct
     if body.mode == "GUARDED_AUTO":
         state = await ctx.state.snapshot()
         plan = build_plan(state) if state is not None else None
-        trip = tripwire.evaluate(state, plan, str(ctx.state.last_error) if ctx.state.last_error else None)
+        err = str(ctx.state.last_error) if ctx.state.last_error else None
+        trip = tripwire.evaluate(state, plan, err, persistence_error=ctx.state.persistence_error)
         if trip.state == "TRIPPED":
             raise HTTPException(409, detail={"code": "TRIPWIRE_TRIPPED", "message": "GUARDED_AUTO is refused while the safety guard is tripped."})
     ctx.automation = body
