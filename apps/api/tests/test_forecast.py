@@ -3,7 +3,7 @@ from collections.abc import Callable
 import pytest
 
 from app.domain.models import DemandObservation, NetworkState, Policy
-from app.intelligence.forecast import forecast_demand, multiplier_at
+from app.intelligence.forecast import forecast_demand, multiplier_at, structural_demand
 from tests.conftest import load_state
 
 POLICY = Policy()
@@ -82,3 +82,67 @@ def test_multiplier_at_reconstructs_history_from_spike_events() -> None:
     assert multiplier_at(state, mirpur, 30) == pytest.approx(1.8)
     other = next(s for s in state.stations if s.region_id != "region-dhaka")
     assert multiplier_at(state, other, 30) == other.demand_multiplier
+
+
+def _scheduled_spike_state(start_tick: int) -> NetworkState:
+    """route-disruption at tick 40 with the Dhaka spike rewound to be SCHEDULED: history and live multiplier are all baseline."""
+    state = load_state("route-disruption")
+    dhaka = {s.id for s in state.stations if s.region_id == "region-dhaka"}
+    spike = state.events[1].model_copy(update={"start_tick": start_tick, "status": "SCHEDULED"})
+    stations = [s.model_copy(update={"demand_multiplier": 1.0}) if s.id in dhaka else s for s in state.stations]
+    rewound = state.model_copy(update={"events": [state.events[0], spike], "stations": stations})
+    return _map_demand(rewound, lambda o: o.demand_liters / 1.8 if o.station_id in dhaka and o.tick >= 24 else o.demand_liters)
+
+
+def _horizon_error(forecast_liters: list[float], truth: list[float]) -> float:
+    return sum(abs(f - t) / t for f, t in zip(forecast_liters, truth, strict=True)) / len(truth)
+
+
+def test_scheduled_spike_is_anticipated_and_naive_forecast_is_measurably_worse() -> None:
+    state = _scheduled_spike_state(start_tick=44)
+    spike = state.events[1]
+    mirpur = next(s for s in state.stations if s.id == DHAKA_STATION)
+    start = state.run.tick + 1
+    truth = [
+        structural_demand(state, mirpur, "DIESEL", t, 1.8 if spike.start_tick <= t < spike.end_tick else 1.0)
+        for t in range(start, start + POLICY.horizon_ticks)
+    ]
+    naive_state = state.model_copy(update={"events": [state.events[0]]})  # what the forecast believed before it read events
+    aware = _horizon_error(_forecast(state).liters_per_tick, truth)
+    naive = _horizon_error(_forecast(naive_state).liters_per_tick, truth)
+    assert aware < 0.02
+    assert naive > 0.15 and naive > 10 * aware
+
+
+def test_spike_ending_inside_the_horizon_is_not_forecast_to_last_forever() -> None:
+    state = load_state("route-disruption")  # Dhaka spike x1.8 active until tick 56
+    forecast = _forecast(state)
+    mirpur = next(s for s in state.stations if s.id == DHAKA_STATION)
+    for tick in (state.run.tick + 1, 60):
+        i = tick - forecast.start_tick
+        multiplier = 1.8 if tick < 56 else 1.0
+        assert forecast.liters_per_tick[i] == pytest.approx(
+            structural_demand(state, mirpur, "DIESEL", tick, multiplier) * forecast.calibration, rel=1e-3
+        )
+
+
+def _with_spike(state: NetworkState, parameters: dict) -> NetworkState:
+    """route-disruption with its spike's parameters replaced; station multipliers reset so only the event explains them."""
+    spike = state.events[1].model_copy(update={"parameters": parameters})
+    return state.model_copy(update={"events": [state.events[0], spike]})
+
+
+@pytest.mark.parametrize(
+    ("parameters", "hit"),
+    [
+        ({"multiplier": 1.8}, {"station-mirpur", "station-tongi", "station-karnaphuli", "station-coxsbazar"}),  # no filters: every station
+        ({"multiplier": 1.8, "region_ids": []}, {"station-mirpur", "station-tongi", "station-karnaphuli", "station-coxsbazar"}),
+        ({"multiplier": 1.8, "station_ids": ["station-tongi"]}, {"station-tongi"}),
+        ({"multiplier": 1.8, "region_ids": ["region-chattogram"]}, {"station-karnaphuli", "station-coxsbazar"}),
+    ],
+)
+def test_spike_filters_follow_the_simulator_guide(parameters: dict, hit: set[str]) -> None:
+    state = _with_spike(load_state("route-disruption"), parameters)
+    for station in state.stations:
+        expected = 1.8 if station.id in hit else 1.0
+        assert multiplier_at(state, station, 30) / multiplier_at(state, station, 23) == pytest.approx(expected)
