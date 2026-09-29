@@ -67,8 +67,9 @@ def test_station_squeezed_out_by_a_shared_depot_is_explained() -> None:
     state = load_state("scarcity")
     tongi = next(s for s in state.stations if s.id == TONGI)
     mirpur = next(s for s in state.stations if s.id == MIRPUR)
-    # Tongi burns fuel ~3x faster than Mirpur, so at equal stock its fair share of the 4,500 L leaves Mirpur under the minimum shipment.
-    stations = {TONGI: {"inventory": {**tongi.inventory, "DIESEL": 2500.0}}, MIRPUR: {"inventory": {**mirpur.inventory, "DIESEL": 2500.0}}}
+    # Tongi burns fuel ~3x faster than Mirpur, so its fair share of the 4,500 L leaves Mirpur under the minimum shipment.
+    # 1,800 L keeps Mirpur urgent (HIGH) under the crisis-aware forecast; the squeeze holds from about 1,650 to 1,950 L.
+    stations = {TONGI: {"inventory": {**tongi.inventory, "DIESEL": 2500.0}}, MIRPUR: {"inventory": {**mirpur.inventory, "DIESEL": 1800.0}}}
     plan = build_plan(_patch(state, stations=stations))
     case = _blocked(plan, MIRPUR)
     assert case.code == "BELOW_MIN_SHIPMENT" and "Higher-priority stations already take 4,500 L" in case.message
