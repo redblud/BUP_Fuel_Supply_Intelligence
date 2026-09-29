@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from app.domain.models import Allocation
 from app.simulator.client import SimResponse
 from app.simulator.errors import SimulatorError
 
@@ -40,7 +41,10 @@ class FakeSimulatorClient:
             body = body[: int(params["limit"])]
         return SimResponse(body, bool(data.get("stale", False)))
 
-    async def create_allocation(self, body: dict) -> dict:
+    async def create_allocation(self, body: dict) -> Allocation:
+        raise SimulatorError("FAKE_READ_ONLY", "Fake simulator does not accept allocations.", 501)
+
+    async def cancel_allocation(self, allocation_id: int) -> Allocation:
         raise SimulatorError("FAKE_READ_ONLY", "Fake simulator does not accept allocations.", 501)
 
     async def admin(self, action: str) -> dict:
