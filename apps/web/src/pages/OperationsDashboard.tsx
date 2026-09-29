@@ -1,102 +1,72 @@
-// First vertical slice: proves React -> /api/dashboard -> FastAPI -> simulator (or fixtures).
-// Developer 3 grows this into the full operator console under src/features/*.
-import type { ReactNode } from 'react'
+import { useState } from 'react'
 import { useDashboard } from '../api/queries'
 import { StatusDot } from '../components/status/StatusDot'
-import { liters, title } from '../lib/format'
+import { HealthPanel, UntrustedBanner } from '../features/HealthPanel'
+import { RiskPanel } from '../features/RiskPanel'
+import { RecommendationPanel } from '../features/RecommendationPanel'
+import { NetworkPanel } from '../features/NetworkPanel'
+import { ProjectionPanel } from '../features/ProjectionPanel'
+import { EventsPanel } from '../features/EventsPanel'
+import { HistoryPanel } from '../features/HistoryPanel'
+import { ControlsPanel } from '../features/ControlsPanel'
+import { title } from '../lib/format'
 
 export function OperationsDashboard() {
-  const { data, error, isPending } = useDashboard()
+  const { data, error, isPending, isFetching, refetch } = useDashboard()
+  const [selectedRisk, setSelectedRisk] = useState('')
 
-  if (isPending)
-    return (
-      <main>
-        <h1>FuelOps AI</h1>
-        <p>Connecting…</p>
-      </main>
-    )
-  if (error || !data)
-    return (
-      <main>
-        <h1>FuelOps AI</h1>
-        <p>
-          <StatusDot status="DOWN" /> Backend unreachable: {error?.message}
-        </p>
-      </main>
-    )
+  if (isPending) {
+    return <main className="app-shell"><div className="loading-state"><span className="pulse-mark" />Connecting to FuelOps…</div></main>
+  }
+
+  if (error || !data) {
+    return <main className="app-shell"><header className="topbar"><h1>FuelOps <strong>AI</strong></h1><span className="simulation-badge">SIMULATION</span></header><section className="panel empty-state" role="alert"><h2>Dashboard unavailable</h2><p>{error?.message ?? 'The API did not return dashboard data.'}</p><button onClick={() => void refetch()}>Try again</button></section></main>
+  }
 
   const { state, plan, tripwire, health, automation } = data
   const freshness = state?.meta.freshness ?? 'UNAVAILABLE'
-  const component = (name: string) => health.components[name]
+  const trusted = freshness === 'FRESH' || freshness === 'FIXTURE'
+  const risks = plan?.risks ?? []
+  const recommendations = plan?.recommendations ?? []
 
   return (
-    <main>
-      <header>
-        <h1>FuelOps AI</h1>
-        <span className="badge">SIMULATION</span>
+    <main className="app-shell">
+      <header className="topbar">
+        <div className="brand"><span className="brand-mark">F</span><div><h1>FuelOps <strong>AI</strong></h1><p>Operator console</p></div></div>
+        <div className="topbar-right"><span className="simulation-badge">SIMULATION</span><span className="refresh-label" aria-live="polite">{isFetching ? 'Updating…' : 'Updates every 2s'}</span></div>
       </header>
 
-      <section className="card">
-        <Row label="Backend">
-          <StatusDot status={component('api')?.status ?? 'UNKNOWN'} />
-        </Row>
-        <Row label="Simulator">
-          <StatusDot status={component('simulator')?.status ?? 'UNKNOWN'} /> {component('simulator')?.detail}
-        </Row>
-        <Row label="Database">
-          <StatusDot status={component('database')?.status ?? 'UNKNOWN'} />
-        </Row>
-        <Row label="State">
-          <StatusDot status={freshness} />
-        </Row>
-        <Row label="Tripwire">
-          <StatusDot status={tripwire.state} />
-        </Row>
-        <Row label="Mode">
-          {automation.mode}
-          {automation.kill_switch ? ' · KILL SWITCH ON' : ''}
-        </Row>
-        <Row label="Current tick">
-          {state ? state.run.tick : `— (last trusted ${data.last_trusted_tick ?? 'none'})`}
-        </Row>
+      <section className="overview" aria-label="System overview">
+        <div className="overview-item"><span>Current tick</span><strong>{state?.run.tick ?? '—'}</strong></div>
+        <div className="overview-item"><span>Simulation time</span><strong>{state ? new Date(state.run.sim_time).toLocaleString() : 'Unavailable'}</strong></div>
+        <div className="overview-item"><span>Snapshot</span><strong><StatusDot status={freshness} /></strong></div>
+        <div className="overview-item"><span>Mode</span><strong>{title(automation.mode)}</strong></div>
+        <div className="overview-item"><span>Tripwire</span><strong><StatusDot status={tripwire.state} /></strong></div>
+        <div className="overview-item"><span>Kill switch</span><strong className={automation.kill_switch ? 'danger-text' : ''}>{automation.kill_switch ? 'ON' : 'OFF'}</strong></div>
       </section>
 
-      {tripwire.trips.length > 0 && (
-        <section className="card">
-          <h2>Trips</h2>
-          <ul>
-            {tripwire.trips.map((t) => (
-              <li key={`${t.code}-${t.scope}`}>
-                <b>{t.code}</b> ({t.severity}) {t.message}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <UntrustedBanner data={data} />
 
-      {plan && (
-        <section className="card">
-          <h2>Recommendations ({plan.planner_version})</h2>
-          {plan.recommendations.length === 0 && <p>No action needed.</p>}
-          <ul>
-            {plan.recommendations.map((r) => (
-              <li key={r.id}>
-                <b>{r.priority}</b> {title(r.station_id)} {r.fuel_type}: {r.summary}{' '}
-                <small>(stress margin {liters(r.stress_margin_liters)})</small>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+
+      <div className="dashboard-grid">
+        <div className="dashboard-column">
+          <NetworkPanel state={state} risks={risks} />
+          <EventsPanel state={state} risks={risks} trips={tripwire.trips} />
+        </div>
+        <div className="dashboard-column">
+          <RiskPanel risks={risks} planAvailable={plan !== null} currentTick={state?.run.tick} onSelect={setSelectedRisk} />
+          <ProjectionPanel plan={plan} state={state} selectedKey={selectedRisk} onSelect={setSelectedRisk} />
+          <HealthPanel health={health} />
+        </div>
+        <div className="dashboard-column">
+          <RecommendationPanel recommendations={recommendations} states={data.recommendation_states} planAvailable={plan !== null} trusted={trusted} />
+          <ControlsPanel data={data} />
+          <HistoryPanel data={data} />
+        </div>
+      </div>
     </main>
   )
 }
 
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="row">
-      <span className="label">{label}</span>
-      <span>{children}</span>
-    </div>
-  )
-}
+
+
