@@ -139,8 +139,7 @@ def plan_replenishment(
             total_deliverable = sum(
                 min(
                     max(
-                        depot_stock[(depot_id, fuel)]
-                        - depots[depot_id].capacity.get(fuel, 0.0) * policy.depot_reserve_fraction,
+                        depot_stock[(depot_id, fuel)] - depots[depot_id].capacity.get(fuel, 0.0) * policy.depot_reserve_fraction,
                         0.0,
                     ),
                     dispatch_left[depot_id],
@@ -169,9 +168,7 @@ def plan_replenishment(
                 resulting_inventory = inventory_at_arrival + quantity
                 resulting_cover = resulting_inventory / target.average_demand / ticks_per_hour if target.average_demand > 0 else inf
                 scarcity_limited = total_deliverable + 1e-9 < needed
-                candidates.append(
-                    _Option(target, route, arrival, inventory_at_arrival, quantity, binding, resulting_cover, scarcity_limited)
-                )
+                candidates.append(_Option(target, route, arrival, inventory_at_arrival, quantity, binding, resulting_cover, scarcity_limited))
 
         if not candidates:
             break
@@ -181,9 +178,7 @@ def plan_replenishment(
         option = min(
             candidates,
             key=lambda item: (
-                item.target.risk.projected_safety_breach_tick
-                if item.target.risk.projected_safety_breach_tick is not None
-                else 10**9,
+                item.target.risk.projected_safety_breach_tick if item.target.risk.projected_safety_breach_tick is not None else 10**9,
                 item.target.risk.redundancy,
                 item.resulting_cover_hours,
                 item.arrival,

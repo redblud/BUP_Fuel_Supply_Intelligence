@@ -1,7 +1,7 @@
 """Write the OpenAPI contract the frontend types are generated from.
 
-    uv run python -m app.export_openapi            # write
-    uv run python -m app.export_openapi --check    # fail if out of date (CI)
+uv run python -m app.export_openapi            # write
+uv run python -m app.export_openapi --check    # fail if out of date (CI)
 """
 
 import json

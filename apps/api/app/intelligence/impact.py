@@ -68,7 +68,7 @@ def _simulate(
     for tick, demand in zip(
         range(forecast.start_tick, forecast.start_tick + len(forecast.liters_per_tick)),
         forecast.liters_per_tick,
-    ):
+        strict=True,    ):
         demand = max(float(demand), 0.0)
         if station.status == "OPEN":
             unmet_total += max(demand - level, 0.0)
@@ -106,9 +106,7 @@ def recommendation_impact(
         arrival_without + max(quantity, 0.0),
     )
 
-    stockout_ticks_avoided = sum(
-        1 for tick, base_level in without.items() if base_level <= 0.0 and with_shipment.get(tick, base_level) > 0.0
-    )
+    stockout_ticks_avoided = sum(1 for tick, base_level in without.items() if base_level <= 0.0 and with_shipment.get(tick, base_level) > 0.0)
 
     return ImpactResult(
         projected_stockout_ticks_avoided=stockout_ticks_avoided,

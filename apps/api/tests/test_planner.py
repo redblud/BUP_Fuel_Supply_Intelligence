@@ -8,9 +8,7 @@ from tests.conftest import load_state
 
 def _replace_diesel_inventory(state, quantities: dict[str, float]):
     stations = [
-        station.model_copy(update={"inventory": {**station.inventory, "DIESEL": quantities[station.id]}})
-        if station.id in quantities
-        else station
+        station.model_copy(update={"inventory": {**station.inventory, "DIESEL": quantities[station.id]}}) if station.id in quantities else station
         for station in state.stations
     ]
     return state.model_copy(update={"stations": stations})
@@ -79,11 +77,7 @@ def test_scarcity_fixture_is_deterministic_and_has_zero_constraint_violations() 
 def test_earliest_safety_breach_is_allocated_first() -> None:
     state = _replace_diesel_inventory(load_state("scarcity"), {"station-mirpur": 1300.0, "station-tongi": 1800.0})
     plan = build_plan(state)
-    risks = {
-        risk.station_id: risk
-        for risk in plan.risks
-        if risk.fuel_type == "DIESEL" and risk.station_id in ("station-mirpur", "station-tongi")
-    }
+    risks = {risk.station_id: risk for risk in plan.risks if risk.fuel_type == "DIESEL" and risk.station_id in ("station-mirpur", "station-tongi")}
 
     assert risks["station-tongi"].projected_safety_breach_tick < risks["station-mirpur"].projected_safety_breach_tick
     assert plan.recommendations[0].station_id == "station-tongi"
@@ -92,17 +86,11 @@ def test_earliest_safety_breach_is_allocated_first() -> None:
 def test_lower_route_redundancy_breaks_equal_breach_tie() -> None:
     state = load_state("scarcity")
     routes = [
-        route.model_copy(update={"destination_station_id": "station-tongi", "status": "AVAILABLE"})
-        if route.id == "route-patiya-mirpur"
-        else route
+        route.model_copy(update={"destination_station_id": "station-tongi", "status": "AVAILABLE"}) if route.id == "route-patiya-mirpur" else route
         for route in state.routes
     ]
     plan = build_plan(state.model_copy(update={"routes": routes}))
-    risks = {
-        risk.station_id: risk
-        for risk in plan.risks
-        if risk.fuel_type == "DIESEL" and risk.station_id in ("station-mirpur", "station-tongi")
-    }
+    risks = {risk.station_id: risk for risk in plan.risks if risk.fuel_type == "DIESEL" and risk.station_id in ("station-mirpur", "station-tongi")}
 
     assert risks["station-mirpur"].projected_safety_breach_tick == risks["station-tongi"].projected_safety_breach_tick
     assert risks["station-mirpur"].redundancy < risks["station-tongi"].redundancy
@@ -179,9 +167,7 @@ def test_quantity_below_minimum_shipment_is_not_recommended() -> None:
     recommendations = build_plan(state.model_copy(update={"stations": stations})).recommendations
 
     assert not [
-        recommendation
-        for recommendation in recommendations
-        if recommendation.station_id == "station-mirpur" and recommendation.fuel_type == "DIESEL"
+        recommendation for recommendation in recommendations if recommendation.station_id == "station-mirpur" and recommendation.fuel_type == "DIESEL"
     ]
 
 
@@ -222,9 +208,7 @@ def test_pending_and_in_transit_quantities_consume_dispatch_capacity() -> None:
     state = state.model_copy(update={"allocations": allocations})
 
     recommendations = [
-        recommendation
-        for recommendation in build_plan(state).recommendations
-        if recommendation.request.source_depot_id == "depot-gazipur"
+        recommendation for recommendation in build_plan(state).recommendations if recommendation.request.source_depot_id == "depot-gazipur"
     ]
 
     assert sum(recommendation.request.quantity for recommendation in recommendations) == 500.0
