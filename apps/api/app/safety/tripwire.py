@@ -1,7 +1,7 @@
 """Tripwire / Safety Guard. Deterministic, explainable, no LLM. Owner: Developer 4.
 
 Rules cover snapshot trust, run identity, planner failure, forecast drift, persistence, unclear executions, and expired
-recommendations. Not covered yet: a recommendation whose conditions changed since it was generated (REQUIRE_MANUAL_REVIEW).
+recommendations, and recommendations whose conditions changed since they were first proposed.
 """
 
 from collections.abc import Sequence
@@ -14,8 +14,10 @@ DRIFT_MIN_TICKS = 3
 
 
 def evaluate(state: NetworkState | None, plan: Plan | None, simulator_error: str | None, unknown_executions: int = 0,
-             persistence_error: str | None = None, expired_recommendations: Sequence[str] = ()) -> TripwireStatus:
-    """Pure: the current trips for this state, plan, and lifecycle facts. `expired_recommendations` are ids that just expired."""
+             persistence_error: str | None = None, expired_recommendations: Sequence[str] = (),
+             review_required: Sequence[str] = ()) -> TripwireStatus:
+    """Pure: the current trips for this state, plan, and lifecycle facts. `expired_recommendations` just expired;
+    `review_required` changed materially since they were first proposed."""
     trips: list[Trip] = []
     tick = state.run.tick if state else None
 
@@ -68,6 +70,11 @@ def evaluate(state: NetworkState | None, plan: Plan | None, simulator_error: str
     for rec_id in expired_recommendations:
         trips.append(Trip(code="RECOMMENDATION_EXPIRED", severity="WARNING", scope=rec_id, detected_tick=tick,
                           message=f"{rec_id} expired before it was executed. A new plan replaces it.", required_actions=["REPLAN"]))
+
+    for rec_id in review_required:
+        trips.append(Trip(code="RECOMMENDATION_CHANGED", severity="WARNING", scope=rec_id, detected_tick=tick,
+                          message=f"{rec_id} changed materially since it was first proposed. Guarded Auto skips it; review and approve it manually.",
+                          required_actions=["REQUIRE_MANUAL_REVIEW"]))
 
     if persistence_error:
         trips.append(Trip(code="PERSISTENCE_FAILURE", severity="CRITICAL", scope="system", detected_tick=tick,

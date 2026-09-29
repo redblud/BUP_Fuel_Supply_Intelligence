@@ -386,6 +386,7 @@ TripCode = Literal[
     "PERSISTENCE_FAILURE",
     "RUN_ID_UNKNOWN",
     "RECOMMENDATION_EXPIRED",
+    "RECOMMENDATION_CHANGED",
     "STATION_UNREACHABLE",
     "FORECAST_DRIFT",
     "PRIMARY_PLANNER_FAILED",
@@ -434,6 +435,24 @@ class RecommendationState(BaseModel):
     updated_tick: int
     allocation_id: int | None = None
     message: str | None = None
+    allocation_status: AllocationStatus | None = Field(
+        default=None, description="Observed lifecycle of the allocation this created (PENDING, IN_TRANSIT, ARRIVED, ...); null until one exists."
+    )
+
+
+class PlanApprovalItem(BaseModel):
+    recommendation_id: str
+    outcome: Literal["EXECUTED", "REFUSED"]
+    status: RecommendationStatus | None = None
+    code: str | None = Field(default=None, description="Refusal code when outcome is REFUSED.")
+    message: str | None = None
+
+
+class PlanApprovalResult(BaseModel):
+    """Result of approving a whole plan in Manual Demo mode. Each recommendation was revalidated just before its POST."""
+
+    items: list[PlanApprovalItem]
+    stopped_early: bool = Field(description="True when a system-level refusal (kill switch, tripped guard, ...) ended the run.")
 
 
 class AutomationState(BaseModel):

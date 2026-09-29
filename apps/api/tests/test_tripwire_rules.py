@@ -95,3 +95,9 @@ def test_forecast_drift_warns_only_with_enough_scored_ticks(state, plan) -> None
     assert status.state == "CLEAR" and t is not None and t.severity == "WARNING"
     for forecasts in ([thin], [good]):
         assert trip(tripwire.evaluate(state, plan.model_copy(update={"forecasts": forecasts}), None), "FORECAST_DRIFT") is None
+
+
+def test_recommendation_changed_requires_manual_review(state) -> None:
+    status = tripwire.evaluate(state, None, None, review_required=["rec-9"])
+    t = trip(status, "RECOMMENDATION_CHANGED")
+    assert status.state == "CLEAR" and t is not None and t.scope == "rec-9" and t.required_actions == ["REQUIRE_MANUAL_REVIEW"]

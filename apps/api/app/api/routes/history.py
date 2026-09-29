@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.deps import AppContext, get_ctx
+from app.decision import orchestrator
 from app.domain.models import (
     AllocationStatus,
     DemandObservation,
@@ -97,5 +98,6 @@ async def list_decisions(
 
     Backed by the in-memory lifecycle until the execution gateway persists it (Dev 4).
     """
+    await orchestrator.track_outcomes(ctx)
     states = [s for s in ctx.recommendation_states.values() if status is None or s.status == status]
     return sorted(states, key=lambda s: s.updated_tick, reverse=True)[:limit]

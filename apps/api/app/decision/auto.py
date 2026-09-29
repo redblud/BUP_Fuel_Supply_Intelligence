@@ -8,10 +8,13 @@ import asyncio
 import contextlib
 import logging
 
+from app.api.auth import audit
 from app.api.deps import AppContext
 from app.decision import orchestrator
 
 log = logging.getLogger(__name__)
+
+AUTO_ACTOR = "guarded-auto"
 
 
 async def auto_step(ctx: AppContext) -> list[str]:
@@ -27,18 +30,22 @@ async def auto_step(ctx: AppContext) -> list[str]:
         from app.intelligence import build_plan
 
         plan = build_plan(state)
-        ctx.recommendation_states = orchestrator.sync_lifecycle(ctx.recommendation_states, plan)
+        orchestrator.sync_plan(ctx, plan)
         proposed = [rid for rid, st in ctx.recommendation_states.items() if st.status == "PROPOSED"]
     for rid in proposed:
+        if rid in ctx.review_required:  # changed since first proposed: only a person may approve it
+            continue
         if ctx.automation.mode != "GUARDED_AUTO" or ctx.automation.kill_switch:
             break  # the operator changed their mind mid pass
         try:
             result = await orchestrator.approve(ctx, rid)
         except orchestrator.DecisionError as exc:
             log.info("auto skipped %s: %s", rid, exc.code)
+            await audit(ctx, AUTO_ACTOR, "auto_approve", rid, f"refused:{exc.code}")
             if exc.code in ("TRIPWIRE_TRIPPED", "KILL_SWITCH", "SNAPSHOT_UNAVAILABLE", "EXECUTION_UNKNOWN"):
                 break  # nothing else can safely run this pass
             continue
+        await audit(ctx, AUTO_ACTOR, "auto_approve", rid, result.status)
         if result.status == "DONE":
             executed.append(rid)
     return executed

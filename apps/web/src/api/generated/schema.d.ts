@@ -182,6 +182,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plan/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Plan
+         * @description Manual Demo: approve every proposed recommendation of the current plan, one at a time.
+         *
+         *     Each one is revalidated on a fresh snapshot just before its POST. A system-level refusal (kill switch, tripped guard,
+         *     unavailable snapshot, unclear execution) stops the run; a refusal specific to one recommendation skips it.
+         */
+        post: operations["approve_plan_api_plan_approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/recommendations/{recommendation_id}/approve": {
         parameters: {
             query?: never;
@@ -627,6 +650,38 @@ export interface components {
             /** Warnings */
             warnings?: string[];
         };
+        /** PlanApprovalItem */
+        PlanApprovalItem: {
+            /**
+             * Code
+             * @description Refusal code when outcome is REFUSED.
+             */
+            code?: string | null;
+            /** Message */
+            message?: string | null;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "EXECUTED" | "REFUSED";
+            /** Recommendation Id */
+            recommendation_id: string;
+            /** Status */
+            status?: ("PROPOSED" | "APPROVED" | "EXECUTING" | "DONE" | "FAILED" | "EXPIRED" | "SUPERSEDED" | "REJECTED") | null;
+        };
+        /**
+         * PlanApprovalResult
+         * @description Result of approving a whole plan in Manual Demo mode. Each recommendation was revalidated just before its POST.
+         */
+        PlanApprovalResult: {
+            /** Items */
+            items: components["schemas"]["PlanApprovalItem"][];
+            /**
+             * Stopped Early
+             * @description True when a system-level refusal (kill switch, tripped guard, ...) ended the run.
+             */
+            stopped_early: boolean;
+        };
         /** ProjectionPoint */
         ProjectionPoint: {
             /**
@@ -722,6 +777,11 @@ export interface components {
         RecommendationState: {
             /** Allocation Id */
             allocation_id?: number | null;
+            /**
+             * Allocation Status
+             * @description Observed lifecycle of the allocation this created (PENDING, IN_TRANSIT, ARRIVED, ...); null until one exists.
+             */
+            allocation_status?: ("PENDING" | "IN_TRANSIT" | "ARRIVED" | "FAILED" | "CANCELLED") | null;
             /** Message */
             message?: string | null;
             /** Recommendation Id */
@@ -1005,7 +1065,7 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "SNAPSHOT_STALE" | "SNAPSHOT_TORN" | "SIMULATOR_UNAVAILABLE" | "RESET_UNCERTAIN" | "EXECUTION_UNKNOWN" | "PERSISTENCE_FAILURE" | "RUN_ID_UNKNOWN" | "RECOMMENDATION_EXPIRED" | "STATION_UNREACHABLE" | "FORECAST_DRIFT" | "PRIMARY_PLANNER_FAILED" | "STATE_SYNC_SUSPECT" | "HISTORY_GAP";
+            code: "SNAPSHOT_STALE" | "SNAPSHOT_TORN" | "SIMULATOR_UNAVAILABLE" | "RESET_UNCERTAIN" | "EXECUTION_UNKNOWN" | "PERSISTENCE_FAILURE" | "RUN_ID_UNKNOWN" | "RECOMMENDATION_EXPIRED" | "RECOMMENDATION_CHANGED" | "STATION_UNREACHABLE" | "FORECAST_DRIFT" | "PRIMARY_PLANNER_FAILED" | "STATE_SYNC_SUSPECT" | "HISTORY_GAP";
             /** Detected Tick */
             detected_tick: number | null;
             /** Message */
@@ -1373,6 +1433,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    approve_plan_api_plan_approve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-operator-token"?: string | null;
+                "x-operator-name"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanApprovalResult"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

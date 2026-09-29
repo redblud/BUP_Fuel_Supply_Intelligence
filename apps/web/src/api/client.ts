@@ -1,4 +1,4 @@
-import type { AutomationState, DashboardResponse, RecommendationState, SystemHealth, TrackedAllocation } from './types'
+import type { AutomationState, DashboardResponse, PlanApprovalResult, RecommendationState, SystemHealth, TrackedAllocation } from './types'
 
 const BASE = import.meta.env.VITE_API_BASE_URL ?? ''
 
@@ -56,6 +56,7 @@ export const api = {
     request<AutomationState>('/api/automation', { method: 'PUT', body: JSON.stringify(body) }),
   recommendationAction: (id: string, action: 'approve' | 'reject') =>
     request<RecommendationState>('/api/recommendations/' + encodeURIComponent(id) + '/' + action, { method: 'POST' }),
+  approvePlan: () => request<PlanApprovalResult>('/api/plan/approve', { method: 'POST' }),
   simControl: (action: 'run' | 'pause' | 'step') =>
     request<Record<string, unknown>>('/api/sim/control', { method: 'POST', body: JSON.stringify({ action }) }),
 }
