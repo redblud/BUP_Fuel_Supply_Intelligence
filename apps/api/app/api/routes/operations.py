@@ -19,6 +19,7 @@ from app.domain.models import (
     SimControlRequest,
 )
 from app.intelligence import build_plan
+from app.persistence import repository
 from app.safety import tripwire
 from app.simulator.errors import SimulatorError
 
@@ -101,6 +102,7 @@ async def set_automation(body: AutomationState, ctx: AppContext = Depends(get_ct
             raise HTTPException(409, detail={"code": "TRIPWIRE_TRIPPED", "message": "GUARDED_AUTO is refused while the safety guard is tripped."})
     ctx.automation = body
     await ctx.db.record("automation", body.model_dump_json())
+    await repository.save_automation(ctx.db, body)
     return ctx.automation
 
 

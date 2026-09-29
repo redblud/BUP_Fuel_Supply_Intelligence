@@ -207,3 +207,69 @@ def test_json_log_carries_context_fields() -> None:
     rec.decision_id, rec.allocation_id, rec.component = "rec-1", 7, "decision"
     out = json.loads(JsonFormatter().format(rec))
     assert out["decision_id"] == "rec-1" and out["allocation_id"] == 7 and out["component"] == "decision" and "run_id" not in out
+
+
+def restart(tmp_path, scenario: str = "route-disruption") -> tuple[TestClient, RecordingSim]:
+    """A second API process on the same database file."""
+    settings = Settings(simulator_mode="fake", fixture_scenario=scenario, database_url=f"sqlite+aiosqlite:///{tmp_path / 'x.db'}")
+    c = TestClient(create_app(settings))
+    c.__enter__()
+    sim = RecordingSim(settings.fixture_dir, scenario)
+    c.app.state.ctx.state.client = sim
+    return c, sim
+
+
+def test_prepared_intent_is_stored_before_the_post(api, tmp_path) -> None:
+    import json
+    import sqlite3
+
+    c, sim = api()
+    rid = first_rec_id(c)
+    seen: list[tuple] = []
+    original = sim.create_allocation
+
+    async def spy(body: dict) -> Allocation:
+        con = sqlite3.connect(tmp_path / "x.db")
+        seen.append(con.execute("SELECT status, message, idempotency_key, request_body FROM execution_intents").fetchone())
+        con.close()
+        return await original(body)
+
+    sim.create_allocation = spy  # type: ignore[method-assign]
+    assert c.post(f"/api/recommendations/{rid}/approve").status_code == 200
+    status, message, key, raw = seen[0]
+    assert (status, message) == ("EXECUTING", "PREPARED")
+    assert json.loads(raw)["idempotency_key"] == key == sim.posts[0]["idempotency_key"]
+
+
+def test_lifecycle_and_kill_switch_survive_a_restart(api, tmp_path) -> None:
+    c, _ = api()
+    rid = first_rec_id(c)
+    assert c.post(f"/api/recommendations/{rid}/approve").json()["status"] == "DONE"
+    c.put("/api/automation", json={"mode": "ADVISORY", "kill_switch": True})
+    c.__exit__(None, None, None)
+    c2, sim2 = restart(tmp_path)
+    assert c2.get("/api/automation").json()["kill_switch"] is True
+    states = {s["recommendation_id"]: s for s in c2.get("/api/dashboard").json()["recommendation_states"]}
+    assert states[rid]["status"] == "DONE"
+    assert sim2.posts == []
+
+
+def test_crash_mid_execution_reloads_as_unknown_and_retries_with_same_key(api, tmp_path) -> None:
+    c, sim = api()
+    rid = first_rec_id(c)
+
+    async def die(body: dict) -> Allocation:
+        sim.posts.append(body)
+        raise RuntimeError("process died")
+
+    sim.create_allocation = die  # type: ignore[method-assign]
+    with pytest.raises(RuntimeError):
+        c.post(f"/api/recommendations/{rid}/approve")
+    key = sim.posts[0]["idempotency_key"]
+    c.__exit__(None, None, None)
+    c2, sim2 = restart(tmp_path)
+    dash = c2.get("/api/dashboard").json()
+    assert "EXECUTION_UNKNOWN" in [t["code"] for t in dash["tripwire"]["trips"]]
+    ok = c2.post(f"/api/recommendations/{rid}/approve")
+    assert ok.json()["status"] == "DONE"
+    assert sim2.posts[0]["idempotency_key"] == key

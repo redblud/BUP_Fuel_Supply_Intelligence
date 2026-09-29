@@ -9,6 +9,7 @@ from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.decision.auto import AutoRunner
 from app.domain.models import AutomationState
+from app.persistence import repository
 from app.persistence.database import Database
 from app.simulator.client import RealSimulatorClient, SimulatorClient
 from app.simulator.fake import FakeSimulatorClient
@@ -48,8 +49,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 db=db,
                 history_ticks=settings.demand_history_ticks,
             ),
-            automation=AutomationState(mode=settings.automation_default_mode, kill_switch=False),
-            recommendation_states={},
+            automation=await repository.load_automation(db) or AutomationState(mode=settings.automation_default_mode, kill_switch=False),
+            recommendation_states=await repository.load_recommendation_states(db),
         )
         sync = None
         if settings.simulator_mode == "real":  # fixtures are static: read them on demand

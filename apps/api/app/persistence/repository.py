@@ -5,9 +5,25 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.dialects.sqlite import insert
 
-from app.domain.models import Allocation, AllocationTransition, DemandObservation, NetworkState, TrackedAllocation
+from app.domain.models import (
+    Allocation,
+    AllocationTransition,
+    AutomationState,
+    DemandObservation,
+    NetworkState,
+    RecommendationState,
+    TrackedAllocation,
+)
 from app.persistence.database import Database
-from app.persistence.models import AllocationTransitionRow, DemandObservationRow, SimulationRun, SnapshotRow, StationStateObservation
+from app.persistence.models import (
+    AllocationTransitionRow,
+    AutomationSettingRow,
+    DemandObservationRow,
+    ExecutionIntentRow,
+    SimulationRun,
+    SnapshotRow,
+    StationStateObservation,
+)
 from app.state.allocations import new_transitions
 
 
@@ -182,3 +198,75 @@ async def load_demand_history(
         )
         for r in reversed(rows)
     ]
+
+
+async def save_intent(
+    db: Database, state: RecommendationState, *, run_id: str, idempotency_key: str | None = None, request_body: str | None = None
+) -> None:
+    """Upsert the durable lifecycle row. Keeps the stored key and body when a later update does not supply them."""
+    async with db.sessions() as s:
+        row = await s.get(ExecutionIntentRow, state.recommendation_id)
+        if row is None:
+            row = ExecutionIntentRow(recommendation_id=state.recommendation_id, run_id=run_id, status=state.status, updated_tick=state.updated_tick)
+            s.add(row)
+        row.run_id = run_id
+        row.status = state.status
+        row.updated_tick = state.updated_tick
+        row.allocation_id = state.allocation_id
+        row.message = state.message
+        row.updated_at = datetime.now(UTC)
+        if idempotency_key is not None:
+            row.idempotency_key = idempotency_key
+        if request_body is not None:
+            row.request_body = request_body
+        await s.commit()
+
+
+async def load_intent_body(db: Database, recommendation_id: str) -> tuple[str, str] | None:
+    """(idempotency_key, request_body) stored before the POST, for a verbatim replay. None if nothing was prepared."""
+    async with db.sessions() as s:
+        row = await s.get(ExecutionIntentRow, recommendation_id)
+    if row is None or row.idempotency_key is None or row.request_body is None:
+        return None
+    return row.idempotency_key, row.request_body
+
+
+async def load_recommendation_states(db: Database) -> dict[str, RecommendationState]:
+    """Lifecycle rows of the most recently seen run.
+
+    An EXECUTING row with no recorded outcome reloads as EXECUTION_UNKNOWN: the process may have died between the POST
+    and its answer, so nothing else runs until that is confirmed.
+    """
+    async with db.sessions() as s:
+        run_id = await s.scalar(select(SimulationRun.run_id).order_by(SimulationRun.last_seen_at.desc()).limit(1))
+        if run_id is None:
+            return {}
+        rows = (await s.scalars(select(ExecutionIntentRow).where(ExecutionIntentRow.run_id == run_id))).all()
+    out: dict[str, RecommendationState] = {}
+    for r in rows:
+        message = r.message
+        if r.status == "EXECUTING" and not (message or "").startswith("EXECUTION_UNKNOWN"):
+            message = "EXECUTION_UNKNOWN: the API restarted while this was executing. Confirm on the simulator, then approve again (same key)."
+        out[r.recommendation_id] = RecommendationState(
+            recommendation_id=r.recommendation_id, status=r.status, updated_tick=r.updated_tick, allocation_id=r.allocation_id, message=message
+        )
+    return out
+
+
+async def save_automation(db: Database, automation: AutomationState) -> None:
+    """Persist the operating mode and kill switch."""
+    async with db.sessions() as s:
+        row = await s.get(AutomationSettingRow, 1)
+        if row is None:
+            s.add(AutomationSettingRow(id=1, payload=automation.model_dump_json()))
+        else:
+            row.payload = automation.model_dump_json()
+            row.updated_at = datetime.now(UTC)
+        await s.commit()
+
+
+async def load_automation(db: Database) -> AutomationState | None:
+    """The persisted automation state, or None on first start."""
+    async with db.sessions() as s:
+        row = await s.get(AutomationSettingRow, 1)
+    return AutomationState.model_validate_json(row.payload) if row else None

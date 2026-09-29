@@ -88,3 +88,32 @@ class SnapshotRow(Base):
     retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     freshness: Mapped[str] = mapped_column(String(32))
     payload: Mapped[str] = mapped_column(Text)
+
+
+class ExecutionIntentRow(Base):
+    """Durable lifecycle of one recommendation: written as PREPARED before the simulator POST, updated with the outcome.
+
+    `request_body` is the exact body sent, so a retry after an unclear result replays it verbatim with the same key.
+    """
+
+    __tablename__ = "execution_intents"
+
+    recommendation_id: Mapped[str] = mapped_column(String(200), primary_key=True)
+    run_id: Mapped[str] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(16))
+    updated_tick: Mapped[int] = mapped_column(Integer)
+    allocation_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    request_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
+class AutomationSettingRow(Base):
+    """Single row holding the operating mode and kill switch, so a restart never silently clears the kill switch."""
+
+    __tablename__ = "automation_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    payload: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
