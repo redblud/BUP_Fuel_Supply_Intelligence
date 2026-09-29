@@ -1,14 +1,15 @@
 """Tripwire / Safety Guard. Deterministic, explainable, no LLM. Owner: Developer 4.
 
 Foundation rules cover snapshot trust and planner failure.
-TODO(dev4): RESET_UNCERTAIN, EXECUTION_UNKNOWN, PERSISTENCE_FAILURE, RECOMMENDATION_EXPIRED,
+TODO(dev4): PERSISTENCE_FAILURE, RECOMMENDATION_EXPIRED,
 FORECAST_DRIFT, per-recommendation checks.
 """
 
 from app.domain.models import NetworkState, Plan, Trip, TripwireStatus
 
 
-def evaluate(state: NetworkState | None, plan: Plan | None, simulator_error: str | None) -> TripwireStatus:
+def evaluate(state: NetworkState | None, plan: Plan | None, simulator_error: str | None, unknown_executions: int = 0,
+             persistence_error: str | None = None) -> TripwireStatus:
     trips: list[Trip] = []
     tick = state.run.tick if state else None
 
@@ -47,5 +48,15 @@ def evaluate(state: NetworkState | None, plan: Plan | None, simulator_error: str
             if "CONNECTIVITY_RISK" in risk.reason_codes:
                 trips.append(Trip(code="STATION_UNREACHABLE", severity="WARNING", scope=risk.station_id, detected_tick=tick,
                                   message=f"{risk.station_id} {risk.fuel_type}: {risk.reason}", required_actions=["ALERT"]))
+
+    if persistence_error:
+        trips.append(Trip(code="PERSISTENCE_FAILURE", severity="CRITICAL", scope="system", detected_tick=tick,
+                          message=f"Storage is failing ({persistence_error}). The advisory view still works; execution is frozen.",
+                          required_actions=["FREEZE_AUTOMATION", "ALERT"]))
+
+    if unknown_executions:
+        trips.append(Trip(code="EXECUTION_UNKNOWN", severity="CRITICAL", scope="system", detected_tick=tick,
+                          message=f"{unknown_executions} execution(s) with an unclear outcome. Confirm on the simulator before more orders.",
+                          required_actions=["FREEZE_AUTOMATION", "FULL_RESYNC"]))
 
     return TripwireStatus(state="TRIPPED" if any(t.severity == "CRITICAL" for t in trips) else "CLEAR", trips=trips)

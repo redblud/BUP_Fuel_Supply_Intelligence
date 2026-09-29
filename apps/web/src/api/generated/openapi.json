@@ -1916,6 +1916,16 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -2288,6 +2298,7 @@
     },
     "/api/recommendations/{recommendation_id}/approve": {
       "post": {
+        "description": "Revalidate on a fresh snapshot, check kill switch, Tripwire and expiry, then execute once (idempotent).",
         "operationId": "approve_api_recommendations__recommendation_id__approve_post",
         "parameters": [
           {
@@ -2311,6 +2322,16 @@
             },
             "description": "Successful Response"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
           "409": {
             "content": {
               "application/json": {
@@ -2331,7 +2352,7 @@
             },
             "description": "Validation Error"
           },
-          "501": {
+          "502": {
             "content": {
               "application/json": {
                 "schema": {
@@ -2339,7 +2360,17 @@
                 }
               }
             },
-            "description": "Not Implemented"
+            "description": "Bad Gateway"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Approve",
@@ -2350,6 +2381,7 @@
     },
     "/api/recommendations/{recommendation_id}/reject": {
       "post": {
+        "description": "Decline a proposed recommendation.",
         "operationId": "reject_api_recommendations__recommendation_id__reject_post",
         "parameters": [
           {
@@ -2373,6 +2405,26 @@
             },
             "description": "Successful Response"
           },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -2382,16 +2434,6 @@
               }
             },
             "description": "Validation Error"
-          },
-          "501": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorBody"
-                }
-              }
-            },
-            "description": "Not Implemented"
           }
         },
         "summary": "Reject",
