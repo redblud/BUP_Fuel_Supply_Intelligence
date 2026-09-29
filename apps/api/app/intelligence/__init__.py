@@ -23,10 +23,10 @@ def build_plan(state: NetworkState, policy: Policy | None = None) -> Plan:
     risks = assess_risk(state, projections)
     warnings: list[str] = []
     try:
-        recommendations = plan_replenishment(state, forecasts, risks, projections, policy)
+        recommendations, blocked = plan_replenishment(state, forecasts, risks, projections, policy)
         version = PLANNER_VERSION
     except Exception as exc:
-        recommendations, version = [], "fallback"
+        recommendations, blocked, version = [], [], "fallback"
         warnings.append(f"PRIMARY_PLANNER_FAILED: {type(exc).__name__}: {exc}")
     return Plan(
         tick=state.run.tick,
@@ -36,5 +36,6 @@ def build_plan(state: NetworkState, policy: Policy | None = None) -> Plan:
         projections=projections,
         risks=risks,
         recommendations=recommendations,
+        blocked=blocked,
         warnings=warnings,
     )

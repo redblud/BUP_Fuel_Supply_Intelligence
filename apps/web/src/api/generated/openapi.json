@@ -253,6 +253,59 @@
         "title": "AutomationState",
         "type": "object"
       },
+      "BlockedCase": {
+        "description": "A CRITICAL or HIGH station/fuel the planner could not send fuel to, and why. Never silently dropped.",
+        "properties": {
+          "code": {
+            "enum": [
+              "UNREACHABLE",
+              "DEPOT_EMPTY",
+              "DEPOT_BELOW_RESERVE",
+              "DISPATCH_FULL",
+              "STATION_TANK_FULL",
+              "BELOW_MIN_SHIPMENT"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "fuel_type": {
+            "enum": [
+              "DIESEL",
+              "PETROL",
+              "OCTANE"
+            ],
+            "title": "Fuel Type",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "priority": {
+            "enum": [
+              "OK",
+              "WATCH",
+              "HIGH",
+              "CRITICAL"
+            ],
+            "title": "Priority",
+            "type": "string"
+          },
+          "station_id": {
+            "title": "Station Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "station_id",
+          "fuel_type",
+          "priority",
+          "code",
+          "message"
+        ],
+        "title": "BlockedCase",
+        "type": "object"
+      },
       "ComponentHealth": {
         "properties": {
           "detail": {
@@ -552,6 +605,67 @@
         "title": "Forecast",
         "type": "object"
       },
+      "ForecastConfidence": {
+        "description": "How far to trust the forecast behind a recommendation. Derived only from measured forecast error, never a probability.",
+        "properties": {
+          "error_band_liters": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Measured error applied to forecast demand between now and arrival.",
+            "title": "Error Band Liters"
+          },
+          "error_mape": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Measured forecast error (Forecast.error_mape); null when unmeasured.",
+            "title": "Error Mape"
+          },
+          "error_ticks": {
+            "description": "Observed ticks that error was measured on.",
+            "title": "Error Ticks",
+            "type": "integer"
+          },
+          "level": {
+            "enum": [
+              "HIGH",
+              "MEDIUM",
+              "LOW",
+              "UNMEASURED"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "shortfall_liters": {
+            "description": "Safety stock minus projected inventory at arrival, without this shipment; 0 if none.",
+            "title": "Shortfall Liters",
+            "type": "number"
+          }
+        },
+        "required": [
+          "level",
+          "error_ticks",
+          "shortfall_liters",
+          "message"
+        ],
+        "title": "ForecastConfidence",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -735,6 +849,14 @@
       },
       "Plan": {
         "properties": {
+          "blocked": {
+            "description": "Urgent stations with no recommendation, and why.",
+            "items": {
+              "$ref": "#/components/schemas/BlockedCase"
+            },
+            "title": "Blocked",
+            "type": "array"
+          },
           "forecasts": {
             "items": {
               "$ref": "#/components/schemas/Forecast"
@@ -828,6 +950,9 @@
             "title": "Alternatives",
             "type": "array"
           },
+          "confidence": {
+            "$ref": "#/components/schemas/ForecastConfidence"
+          },
           "current_inventory": {
             "title": "Current Inventory",
             "type": "number"
@@ -869,6 +994,9 @@
             "description": "Deterministic: same NetworkState + Policy -> same id.",
             "title": "Id",
             "type": "string"
+          },
+          "impact": {
+            "$ref": "#/components/schemas/RecommendationImpact"
           },
           "planner_version": {
             "title": "Planner Version",
@@ -962,9 +1090,47 @@
           "summary",
           "factors",
           "alternatives",
+          "impact",
+          "confidence",
           "planner_version"
         ],
         "title": "Recommendation",
+        "type": "object"
+      },
+      "RecommendationImpact": {
+        "description": "What sending this shipment changes over the forecast horizon, versus not sending it (earlier planned shipments included).",
+        "properties": {
+          "horizon_ticks": {
+            "title": "Horizon Ticks",
+            "type": "integer"
+          },
+          "inventory_at_arrival_with": {
+            "title": "Inventory At Arrival With",
+            "type": "number"
+          },
+          "inventory_at_arrival_without": {
+            "title": "Inventory At Arrival Without",
+            "type": "number"
+          },
+          "stockout_ticks_avoided": {
+            "description": "Horizon ticks at zero inventory without the shipment minus with it.",
+            "title": "Stockout Ticks Avoided",
+            "type": "integer"
+          },
+          "unmet_liters_avoided": {
+            "description": "Forecast demand that would go unserved without the shipment minus with it.",
+            "title": "Unmet Liters Avoided",
+            "type": "number"
+          }
+        },
+        "required": [
+          "horizon_ticks",
+          "stockout_ticks_avoided",
+          "unmet_liters_avoided",
+          "inventory_at_arrival_without",
+          "inventory_at_arrival_with"
+        ],
+        "title": "RecommendationImpact",
         "type": "object"
       },
       "RecommendationState": {

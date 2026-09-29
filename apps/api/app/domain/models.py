@@ -300,6 +300,30 @@ class AlternativeAction(BaseModel):
     rejected_because: str
 
 
+class RecommendationImpact(BaseModel):
+    """What sending this shipment changes over the forecast horizon, versus not sending it (earlier planned shipments included)."""
+
+    horizon_ticks: int
+    stockout_ticks_avoided: int = Field(description="Horizon ticks at zero inventory without the shipment minus with it.")
+    unmet_liters_avoided: float = Field(description="Forecast demand that would go unserved without the shipment minus with it.")
+    inventory_at_arrival_without: float
+    inventory_at_arrival_with: float
+
+
+ConfidenceLevel = Literal["HIGH", "MEDIUM", "LOW", "UNMEASURED"]
+
+
+class ForecastConfidence(BaseModel):
+    """How far to trust the forecast behind a recommendation. Derived only from measured forecast error, never a probability."""
+
+    level: ConfidenceLevel
+    error_mape: float | None = Field(default=None, description="Measured forecast error (Forecast.error_mape); null when unmeasured.")
+    error_ticks: int = Field(description="Observed ticks that error was measured on.")
+    error_band_liters: float | None = Field(default=None, description="Measured error applied to forecast demand between now and arrival.")
+    shortfall_liters: float = Field(description="Safety stock minus projected inventory at arrival, without this shipment; 0 if none.")
+    message: str
+
+
 class Recommendation(BaseModel):
     id: str = Field(description="Deterministic: same NetworkState + Policy -> same id.")
     station_id: str
@@ -319,7 +343,22 @@ class Recommendation(BaseModel):
     summary: str
     factors: list[str]
     alternatives: list[AlternativeAction]
+    impact: RecommendationImpact
+    confidence: ForecastConfidence
     planner_version: str
+
+
+BlockedCode = Literal["UNREACHABLE", "DEPOT_EMPTY", "DEPOT_BELOW_RESERVE", "DISPATCH_FULL", "STATION_TANK_FULL", "BELOW_MIN_SHIPMENT"]
+
+
+class BlockedCase(BaseModel):
+    """A CRITICAL or HIGH station/fuel the planner could not send fuel to, and why. Never silently dropped."""
+
+    station_id: str
+    fuel_type: FuelType
+    priority: RiskLevel
+    code: BlockedCode
+    message: str
 
 
 class Plan(BaseModel):
@@ -330,6 +369,7 @@ class Plan(BaseModel):
     projections: list[InventoryProjection]
     risks: list[RiskAssessment]
     recommendations: list[Recommendation]
+    blocked: list[BlockedCase] = Field(default_factory=list, description="Urgent stations with no recommendation, and why.")
     warnings: list[str] = Field(default_factory=list)
 
 
