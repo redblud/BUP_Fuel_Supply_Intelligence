@@ -22,6 +22,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/automation/kill-switch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Engage Kill Switch */
+        post: operations["engage_kill_switch_api_automation_kill_switch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/automation/kill-switch/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Clear Kill Switch */
+        post: operations["clear_kill_switch_api_automation_kill_switch_clear_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/automation/rearm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rearm */
+        post: operations["rearm_api_automation_rearm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/dashboard": {
         parameters: {
             query?: never;
@@ -36,6 +87,125 @@ export interface paths {
         get: operations["dashboard_api_dashboard_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/demo/event": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Demo Event */
+        post: operations["demo_event_api_demo_event_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/demo/fault": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Demo Fault */
+        post: operations["demo_fault_api_demo_fault_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/demo/faults/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Demo Clear Faults */
+        post: operations["demo_clear_faults_api_demo_faults_clear_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/demo/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Demo Pause */
+        post: operations["demo_pause_api_demo_pause_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/demo/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Demo Reset */
+        post: operations["demo_reset_api_demo_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/demo/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Demo Run */
+        post: operations["demo_run_api_demo_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/demo/step": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Demo Step */
+        post: operations["demo_step_api_demo_step_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -235,18 +405,69 @@ export interface components {
             /** Source Depot Id */
             source_depot_id: string;
         };
+        /** ApprovalRequest */
+        ApprovalRequest: {
+            /**
+             * Confirm Override
+             * @default false
+             */
+            confirm_override?: boolean;
+            /** Override Reason */
+            override_reason?: string | null;
+        };
         /** AutomationState */
         AutomationState: {
+            /** Allowed Fuels */
+            allowed_fuels?: ("DIESEL" | "PETROL" | "OCTANE")[];
             /**
              * Kill Switch
              * @description When true, nothing executes, in any mode.
              */
             kill_switch: boolean;
             /**
+             * Max Liters Per Hour
+             * @default 0
+             */
+            max_liters_per_hour?: number;
+            /**
+             * Max Quantity Per Allocation
+             * @default 0
+             */
+            max_quantity_per_allocation?: number;
+            /**
              * Mode
              * @enum {string}
              */
             mode: "ADVISORY" | "GUARDED_AUTO" | "MANUAL_DEMO";
+            /** Mode Expires At */
+            mode_expires_at?: string | null;
+            /** Ttl Minutes */
+            ttl_minutes?: number;
+        };
+        /** AutomationUpdateRequest */
+        AutomationUpdateRequest: {
+            /** Allowed Fuels */
+            allowed_fuels?: ("DIESEL" | "PETROL" | "OCTANE")[];
+            /**
+             * Max Liters Per Hour
+             * @default 0
+             */
+            max_liters_per_hour?: number;
+            /**
+             * Max Quantity Per Allocation
+             * @default 0
+             */
+            max_quantity_per_allocation?: number;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "ADVISORY" | "GUARDED_AUTO" | "MANUAL_DEMO";
+            /**
+             * Ttl Minutes
+             * @default 30
+             */
+            ttl_minutes?: number;
         };
         /** ComponentHealth */
         ComponentHealth: {
@@ -274,6 +495,53 @@ export interface components {
             recommendation_states: components["schemas"]["RecommendationState"][];
             state: components["schemas"]["NetworkState"] | null;
             tripwire: components["schemas"]["TripwireStatus"];
+        };
+        /** DemoClearRequest */
+        DemoClearRequest: {
+            /**
+             * Reason
+             * @default demo recovery
+             */
+            reason?: string;
+        };
+        /** DemoEventRequest */
+        DemoEventRequest: {
+            /**
+             * Duration Ticks
+             * @default 1
+             */
+            duration_ticks?: number;
+            /** Parameters */
+            parameters?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Start Tick
+             * @default 0
+             */
+            start_tick?: number;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "demand_spike" | "route_disruption" | "station_outage" | "depot_constraint" | "shipment_delay" | "supply_shortfall";
+        };
+        /** DemoFaultRequest */
+        DemoFaultRequest: {
+            /**
+             * Duration Seconds
+             * @default 60
+             */
+            duration_seconds?: number;
+            /** Parameters */
+            parameters?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "latency" | "unavailable" | "error_rate" | "stale_data" | "stream_disconnect";
         };
         /** DemandObservation */
         DemandObservation: {
@@ -317,21 +585,6 @@ export interface components {
              */
             status: "OPEN" | "CONSTRAINED";
         };
-        /**
-         * DepotSupplyProjection
-         * @description Expected depot inventory after scheduled supply arrivals and crisis effects.
-         */
-        DepotSupplyProjection: {
-            /** Depot Id */
-            depot_id: string;
-            /**
-             * Fuel Type
-             * @enum {string}
-             */
-            fuel_type: "DIESEL" | "PETROL" | "OCTANE";
-            /** Points */
-            points: components["schemas"]["ProjectionPoint"][];
-        };
         /** ErrorBody */
         ErrorBody: {
             /** Code */
@@ -349,8 +602,6 @@ export interface components {
              * @description alpha in forecast = alpha x structural demand.
              */
             calibration: number;
-            /** @description Measured rolling error; unavailable for a cold start. */
-            error: components["schemas"]["ForecastError"];
             /**
              * Fuel Type
              * @enum {string}
@@ -365,22 +616,6 @@ export interface components {
             /** Station Id */
             station_id: string;
         };
-        /**
-         * ForecastError
-         * @description Measured one-step forecast error over recent demand observations.
-         */
-        ForecastError: {
-            /** Mae Liters */
-            mae_liters?: number | null;
-            /** Rmse Liters */
-            rmse_liters?: number | null;
-            /** Sample Count */
-            sample_count: number;
-            /** Smape Percent */
-            smape_percent?: number | null;
-            /** Wape Percent */
-            wape_percent?: number | null;
-        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -393,12 +628,8 @@ export interface components {
              * @enum {string}
              */
             fuel_type: "DIESEL" | "PETROL" | "OCTANE";
-            /** Minimum Projected Inventory */
-            minimum_projected_inventory: number;
             /** Points */
             points: components["schemas"]["ProjectionPoint"][];
-            /** Projected Shortage Liters */
-            projected_shortage_liters: number;
             /** Safety Stock */
             safety_stock: number;
             /** Station Id */
@@ -431,10 +662,33 @@ export interface components {
             /** Supply Arrivals */
             supply_arrivals: components["schemas"]["SupplyArrival"][];
         };
+        /** BlockedCase */
+        BlockedCase: {
+            /** Factors */
+            factors?: string[];
+            /** Fuel Type */
+            fuel_type: "DIESEL" | "PETROL" | "OCTANE";
+            /**
+             * Id
+             * @description Deterministic identifier for this blocked case at the current tick.
+             */
+            id: string;
+            /**
+             * Reason Code
+             * @enum {string}
+             */
+            reason_code: "STATION_UNREACHABLE" | "STATION_OUTAGE" | "DEPOT_BELOW_RESERVE" | "DISPATCH_CAPACITY_FULL" | "STATION_CAPACITY_FULL" | "MIN_SHIPMENT" | "ALREADY_COVERED";
+            /**
+             * Single-line operator-facing explanation.
+             */
+            summary: string;
+            /** Station Id */
+            station_id: string;
+        };
         /** Plan */
         Plan: {
-            /** Depot Projections */
-            depot_projections: components["schemas"]["DepotSupplyProjection"][];
+            /** Blocked Cases */
+            blocked_cases?: components["schemas"]["BlockedCase"][];
             /** Forecasts */
             forecasts: components["schemas"]["Forecast"][];
             /**
@@ -458,11 +712,6 @@ export interface components {
         /** ProjectionPoint */
         ProjectionPoint: {
             /**
-             * Demand
-             * @default 0
-             */
-            demand: number;
-            /**
              * Incoming
              * @default 0
              */
@@ -471,16 +720,22 @@ export interface components {
             inventory: number;
             /** Tick */
             tick: number;
-            /**
-             * Unmet Demand
-             * @default 0
-             */
-            unmet_demand: number;
         };
         /** Recommendation */
         Recommendation: {
             /** Alternatives */
             alternatives: components["schemas"]["AlternativeAction"][];
+            /**
+             * Confidence
+             * @description Qualitative robustness label derived only from measured forecast error and the recommendation's stress margin.
+             * @enum {string}
+             */
+            confidence: "HIGH" | "MEDIUM" | "LOW" | "INSUFFICIENT_DATA";
+            /**
+             * Confidence Basis
+             * @description Human-readable, non-probabilistic basis for the confidence label.
+             */
+            confidence_basis: string;
             /** Current Inventory */
             current_inventory: number;
             /** Dispatch Tick */
@@ -495,6 +750,16 @@ export interface components {
             /** Factors */
             factors: string[];
             /**
+             * Forecast Error Band Liters Per Tick
+             * @description Measured recent maximum absolute forecast error band; no probabilistic interpretation.
+             */
+            forecast_error_band_liters_per_tick: number | null;
+            /**
+             * Forecast Error Mae Liters Per Tick
+             * @description Measured recent absolute forecast error (MAE); no probabilistic interpretation.
+             */
+            forecast_error_mae_liters_per_tick: number | null;
+            /**
              * Fuel Type
              * @enum {string}
              */
@@ -506,6 +771,16 @@ export interface components {
              * @description Deterministic: same NetworkState + Policy -> same id.
              */
             id: string;
+            /**
+             * Inventory At Arrival With Liters
+             * @description Projected inventory at the shipment arrival tick including the recommended shipment, capped by station capacity.
+             */
+            inventory_at_arrival_with_liters: number;
+            /**
+             * Inventory At Arrival Without Liters
+             * @description Projected inventory at the shipment arrival tick without the recommended shipment.
+             */
+            inventory_at_arrival_without_liters: number;
             /** Planner Version */
             planner_version: string;
             /**
@@ -519,8 +794,18 @@ export interface components {
             projected_safety_breach_tick: number | null;
             /** Projected Stockout Tick */
             projected_stockout_tick: number | null;
+            /**
+             * Projected Stockout Ticks Avoided
+             * @description Forecast-horizon stockout ticks avoided by this shipment versus no shipment.
+             */
+            projected_stockout_ticks_avoided: number;
+            /**
+             * Projected Unmet Demand Liters Avoided
+             * @description Forecast-horizon unmet demand liters avoided by this shipment versus no shipment.
+             */
+            projected_unmet_demand_liters_avoided: number;
             /** Reason Codes */
-            reason_codes: ("SAFETY_STOCK_BREACH" | "STOCKOUT_BEFORE_ARRIVAL" | "CONNECTIVITY_RISK" | "SINGLE_SOURCE" | "STATION_OUTAGE" | "SCARCITY_LIMITED" | "ROUTE_DISRUPTED" | "FUEL_SCARCITY" | "PROJECTED_SHORTAGE" | "DEMAND_PRESSURE" | "INCOMING_SUPPLY")[];
+            reason_codes: ("SAFETY_STOCK_BREACH" | "STOCKOUT_BEFORE_ARRIVAL" | "CONNECTIVITY_RISK" | "SINGLE_SOURCE" | "STATION_OUTAGE" | "SCARCITY_LIMITED" | "ROUTE_DISRUPTED")[];
             request: components["schemas"]["AllocationRequest"];
             /** Station Id */
             station_id: string;
@@ -559,18 +844,11 @@ export interface components {
         };
         /** RiskAssessment */
         RiskAssessment: {
-            /** Coverage Hours */
-            coverage_hours: number | null;
-            /**
-             * Coverage Ticks
-             * @description Current inventory divided by average forecast demand per tick, before incoming supply.
-             */
-            coverage_ticks: number | null;
             /** Current Inventory */
             current_inventory: number;
             /**
              * Earliest Arrival Tick
-             * @description Earliest tick a new shipment from a currently stocked, reachable depot could land.
+             * @description Earliest tick a new shipment could land; null if unreachable.
              */
             earliest_arrival_tick: number | null;
             /**
@@ -583,60 +861,25 @@ export interface components {
              * @enum {string}
              */
             level: "OK" | "WATCH" | "HIGH" | "CRITICAL";
-            /** Minimum Projected Inventory */
-            minimum_projected_inventory: number;
             /** Projected Inventory At Arrival */
             projected_inventory_at_arrival: number | null;
             /** Projected Safety Breach Tick */
             projected_safety_breach_tick: number | null;
-            /**
-             * Projected Shortage Liters
-             * @description Cumulative forecast demand that cannot be served over the horizon.
-             */
-            projected_shortage_liters: number;
             /** Projected Stockout Tick */
             projected_stockout_tick: number | null;
             /** Reason */
             reason: string;
             /** Reason Codes */
-            reason_codes: ("SAFETY_STOCK_BREACH" | "STOCKOUT_BEFORE_ARRIVAL" | "CONNECTIVITY_RISK" | "SINGLE_SOURCE" | "STATION_OUTAGE" | "SCARCITY_LIMITED" | "ROUTE_DISRUPTED" | "FUEL_SCARCITY" | "PROJECTED_SHORTAGE" | "DEMAND_PRESSURE" | "INCOMING_SUPPLY")[];
+            reason_codes: ("SAFETY_STOCK_BREACH" | "STOCKOUT_BEFORE_ARRIVAL" | "CONNECTIVITY_RISK" | "SINGLE_SOURCE" | "STATION_OUTAGE" | "SCARCITY_LIMITED" | "ROUTE_DISRUPTED")[];
             /**
              * Redundancy
              * @description Number of currently feasible routes to this station for this fuel.
              */
             redundancy: number;
-            /** Risk Drivers */
-            risk_drivers: components["schemas"]["RiskDriver"][];
             /** Safety Stock */
             safety_stock: number;
             /** Station Id */
             station_id: string;
-            /**
-             * Time To Safety Breach Ticks
-             * @description Ticks from the snapshot to the first safety-stock breach.
-             */
-            time_to_safety_breach_ticks: number | null;
-            /**
-             * Time To Stockout Ticks
-             * @description Ticks from the snapshot to projected zero inventory.
-             */
-            time_to_stockout_ticks: number | null;
-        };
-        /** RiskDriver */
-        RiskDriver: {
-            /**
-             * Code
-             * @enum {string}
-             */
-            code: "SAFETY_STOCK_BREACH" | "STOCKOUT_BEFORE_ARRIVAL" | "CONNECTIVITY_RISK" | "SINGLE_SOURCE" | "STATION_OUTAGE" | "SCARCITY_LIMITED" | "ROUTE_DISRUPTED" | "FUEL_SCARCITY" | "PROJECTED_SHORTAGE" | "DEMAND_PRESSURE" | "INCOMING_SUPPLY";
-            /** Detail */
-            detail: string;
-            /** Threshold */
-            threshold?: number | null;
-            /** Unit */
-            unit?: string | null;
-            /** Value */
-            value?: number | null;
         };
         /** Route */
         Route: {
@@ -661,6 +904,8 @@ export interface components {
          * @description Simulator `/v1/instance`.
          */
         RunInfo: {
+            /** Id */
+            id?: number | string | null;
             /** Scenario Id */
             scenario_id: string;
             /** Scenario Version */
@@ -682,6 +927,7 @@ export interface components {
             /** Tick Minutes */
             tick_minutes: number;
         };
+        /** SimControlRequest */
         /** SimControlRequest */
         SimControlRequest: {
             /**
@@ -837,10 +1083,16 @@ export interface components {
         /** Trip */
         Trip: {
             /**
+             * Classification
+             * @default HARD
+             * @enum {string}
+             */
+            classification?: "HARD" | "SOFT" | "INFO";
+            /**
              * Code
              * @enum {string}
              */
-            code: "SNAPSHOT_STALE" | "SNAPSHOT_TORN" | "SIMULATOR_UNAVAILABLE" | "RESET_UNCERTAIN" | "EXECUTION_UNKNOWN" | "PERSISTENCE_FAILURE" | "RUN_ID_UNKNOWN" | "RECOMMENDATION_EXPIRED" | "STATION_UNREACHABLE" | "FORECAST_DRIFT" | "PRIMARY_PLANNER_FAILED" | "STATE_SYNC_SUSPECT";
+            code: "SNAPSHOT_STALE" | "SNAPSHOT_TORN" | "SIMULATOR_UNAVAILABLE" | "RESET_UNCERTAIN" | "EXECUTION_UNKNOWN" | "PERSISTENCE_FAILURE" | "RUN_ID_UNKNOWN" | "RECOMMENDATION_EXPIRED" | "STATION_UNREACHABLE" | "FORECAST_DRIFT" | "PRIMARY_PLANNER_FAILED" | "STATE_SYNC_SUSPECT" | "KILL_SWITCH_ON" | "SSE_DISCONNECTED";
             /** Detected Tick */
             detected_tick: number | null;
             /** Message */
@@ -920,7 +1172,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AutomationState"];
+                "application/json": components["schemas"]["AutomationUpdateRequest"];
             };
         };
         responses: {
@@ -931,6 +1183,286 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AutomationState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    engage_kill_switch_api_automation_kill_switch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KillSwitchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: { [name: string]: unknown; };
+                content: { "application/json": components["schemas"]["AutomationState"]; };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: { [name: string]: unknown; };
+                content: { "application/json": components["schemas"]["HTTPValidationError"]; };
+            };
+        };
+    };
+    clear_kill_switch_api_automation_kill_switch_clear_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KillSwitchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: { [name: string]: unknown; };
+                content: { "application/json": components["schemas"]["AutomationState"]; };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: { [name: string]: unknown; };
+                content: { "application/json": components["schemas"]["HTTPValidationError"]; };
+            };
+        };
+    };
+    rearm_api_automation_rearm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KillSwitchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: { [name: string]: unknown; };
+                content: { "application/json": components["schemas"]["AutomationState"]; };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: { [name: string]: unknown; };
+                content: { "application/json": components["schemas"]["HTTPValidationError"]; };
+            };
+        };
+    };
+    demo_event_api_demo_event_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: { "application/json": components["schemas"]["DemoEventRequest"]; };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    demo_fault_api_demo_fault_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: { "application/json": components["schemas"]["DemoFaultRequest"]; };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    demo_clear_faults_api_demo_faults_clear_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DemoClearRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    demo_pause_api_demo_pause_post: {
+        parameters: { query?: never; header?: never; path?: never; cookie?: never; };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    demo_reset_api_demo_reset_post: {
+        parameters: { query?: never; header?: never; path?: never; cookie?: never; };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    demo_run_api_demo_run_post: {
+        parameters: { query?: never; header?: never; path?: never; cookie?: never; };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    demo_step_api_demo_step_post: {
+        parameters: { query?: never; header?: never; path?: never; cookie?: never; };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -1044,7 +1576,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -1053,15 +1589,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecommendationState"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
                 };
             };
             /** @description Validation Error */
@@ -1073,17 +1600,9 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description Not Implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorBody"];
-                };
-            };
         };
     };
+    reject_api_recommendations__recommendation_id__reject_post: {
     reject_api_recommendations__recommendation_id__reject_post: {
         parameters: {
             query?: never;
@@ -1113,11 +1632,6 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description Not Implemented */
-            501: {
-                headers: {
-                    [name: string]: unknown;
-                };
                 content: {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
