@@ -1060,7 +1060,7 @@
                 "type": "null"
               }
             ],
-            "description": "Earliest tick a new shipment could land; null if unreachable.",
+            "description": "Earliest tick a new shipment could land; null if unreachable or no depot has stock.",
             "title": "Earliest Arrival Tick"
           },
           "fuel_type": {
@@ -1071,6 +1071,30 @@
             ],
             "title": "Fuel Type",
             "type": "string"
+          },
+          "hours_to_safety_breach": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Simulated hours from now to projected_safety_breach_tick; null if none in the horizon.",
+            "title": "Hours To Safety Breach"
+          },
+          "hours_to_stockout": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Simulated hours from now to projected_stockout_tick; null if none in the horizon.",
+            "title": "Hours To Stockout"
           },
           "level": {
             "enum": [
