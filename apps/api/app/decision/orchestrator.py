@@ -117,6 +117,7 @@ def sync_plan(ctx: AppContext, plan: Plan) -> None:
 
 async def track_outcomes(ctx: AppContext) -> None:
     """Attach the observed allocation lifecycle (PENDING, IN_TRANSIT, ARRIVED, ...) to DONE recommendations."""
+    await ctx.state.snapshot()  # on-demand modes only observe allocation changes when the state is read
     updated = dict(ctx.recommendation_states)
     for rec_id, st in ctx.recommendation_states.items():
         if st.status != "DONE" or st.allocation_id is None:

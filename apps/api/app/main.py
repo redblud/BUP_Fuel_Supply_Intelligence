@@ -12,6 +12,7 @@ from app.domain.models import AutomationState
 from app.persistence import repository
 from app.persistence.database import Database
 from app.simulator.client import RealSimulatorClient, SimulatorClient
+from app.simulator.demo import DemoSimulatorClient
 from app.simulator.fake import FakeSimulatorClient
 from app.state.service import StateService
 from app.state.sync import StateSync
@@ -27,6 +28,8 @@ def build_client(settings: Settings) -> SimulatorClient:
             backoff_base=settings.simulator_backoff_base,
             backoff_max=settings.simulator_backoff_max,
         )
+    if settings.simulator_mode == "demo":
+        return DemoSimulatorClient(settings.fixture_dir, settings.fixture_scenario)
     return FakeSimulatorClient(settings.fixture_dir, settings.fixture_scenario)
 
 
