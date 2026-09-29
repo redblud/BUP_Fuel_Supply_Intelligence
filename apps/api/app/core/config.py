@@ -30,6 +30,7 @@ class Settings(BaseSettings):
 
     automation_default_mode: Literal["ADVISORY", "GUARDED_AUTO", "MANUAL_DEMO"] = "ADVISORY"
     snapshot_tick_tolerance: int = 1
+    auto_interval: float = 2.0  # guarded automation pass cadence
     sync_fallback_interval: float = 5.0  # REST poll when SSE is silent or down
     sync_resync_interval: float = 1.0  # retry cadence after a stale, torn, or failed read
     sync_min_refresh_gap: float = 0.25  # coalesce bursts of tick events

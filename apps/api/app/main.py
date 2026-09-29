@@ -7,6 +7,7 @@ from app.api.deps import AppContext
 from app.api.routes import health, history, operations
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
+from app.decision.auto import AutoRunner
 from app.domain.models import AutomationState
 from app.persistence.database import Database
 from app.simulator.client import RealSimulatorClient, SimulatorClient
@@ -59,7 +60,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 min_refresh_gap=settings.sync_min_refresh_gap,
             )
             sync.start()
+        auto = AutoRunner(app.state.ctx, settings.auto_interval)
+        auto.start()
         yield
+        await auto.stop()
         if sync is not None:
             await sync.stop()
         await client.close()

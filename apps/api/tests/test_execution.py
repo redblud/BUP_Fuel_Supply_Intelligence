@@ -132,3 +132,27 @@ def test_concurrent_same_depot_second_is_refused(api) -> None:
     r = c.post(f"/api/recommendations/{rid}/approve")
     assert r.status_code == 409 and r.json()["detail"]["code"] == "DEPOT_BUSY"
     assert sim.posts == []
+
+
+def test_auto_step_executes_only_in_guarded_auto_and_when_clear(api) -> None:
+    from app.decision.auto import auto_step
+
+    c, sim = api()
+    ctx = c.app.state.ctx
+    assert asyncio.run(auto_step(ctx)) == []  # ADVISORY: nothing
+    ctx.automation = ctx.automation.model_copy(update={"mode": "GUARDED_AUTO", "kill_switch": True})
+    assert asyncio.run(auto_step(ctx)) == [] and sim.posts == []  # kill switch
+    ctx.automation = ctx.automation.model_copy(update={"kill_switch": False})
+    done = asyncio.run(auto_step(ctx))
+    assert done and len(sim.posts) == len(done)
+    assert asyncio.run(auto_step(ctx)) == []  # nothing new, no duplicate orders
+    assert len(sim.posts) == len(done)
+
+
+def test_auto_step_does_nothing_when_tripped(api) -> None:
+    from app.decision.auto import auto_step
+
+    c, sim = api("stale")
+    ctx = c.app.state.ctx
+    ctx.automation = ctx.automation.model_copy(update={"mode": "GUARDED_AUTO"})
+    assert asyncio.run(auto_step(ctx)) == [] and sim.posts == []
