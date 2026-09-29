@@ -68,7 +68,8 @@ async def dashboard(ctx: AppContext = Depends(get_ctx)) -> DashboardResponse:
         ctx.recommendation_states = orchestrator.sync_lifecycle(ctx.recommendation_states, plan)
     unknown = sum(1 for st in ctx.recommendation_states.values() if orchestrator.is_unknown(st))
     trip = tripwire.evaluate(state, plan, str(ctx.state.last_error) if ctx.state.last_error else None, unknown_executions=unknown,
-                          persistence_error=ctx.state.persistence_error)
+                          persistence_error=ctx.state.persistence_error,
+                          expired_recommendations=orchestrator.just_expired(ctx.recommendation_states, state.run.tick) if state else ())
     if state is not None and (state.meta.stale or state.meta.freshness not in ("FRESH", "FIXTURE")):
         ctx.counters["snapshot_untrusted_polls"] += 1
     health.components["tripwire"] = ComponentHealth(status="HEALTHY" if trip.state == "CLEAR" else "DEGRADED", detail=trip.state)

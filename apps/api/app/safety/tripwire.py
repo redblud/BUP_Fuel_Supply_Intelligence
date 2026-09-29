@@ -1,15 +1,21 @@
 """Tripwire / Safety Guard. Deterministic, explainable, no LLM. Owner: Developer 4.
 
-Foundation rules cover snapshot trust and planner failure.
-TODO(dev4): PERSISTENCE_FAILURE, RECOMMENDATION_EXPIRED,
-FORECAST_DRIFT, per-recommendation checks.
+Rules cover snapshot trust, run identity, planner failure, forecast drift, persistence, unclear executions, and expired
+recommendations. Not covered yet: a recommendation whose conditions changed since it was generated (REQUIRE_MANUAL_REVIEW).
 """
+
+from collections.abc import Sequence
 
 from app.domain.models import NetworkState, Plan, Trip, TripwireStatus
 
+# A forecast whose backtest error exceeds this, over at least DRIFT_MIN_TICKS observed ticks, is drifting.
+DRIFT_MAPE = 0.5
+DRIFT_MIN_TICKS = 3
+
 
 def evaluate(state: NetworkState | None, plan: Plan | None, simulator_error: str | None, unknown_executions: int = 0,
-             persistence_error: str | None = None) -> TripwireStatus:
+             persistence_error: str | None = None, expired_recommendations: Sequence[str] = ()) -> TripwireStatus:
+    """Pure: the current trips for this state, plan, and lifecycle facts. `expired_recommendations` are ids that just expired."""
     trips: list[Trip] = []
     tick = state.run.tick if state else None
 
@@ -30,6 +36,10 @@ def evaluate(state: NetworkState | None, plan: Plan | None, simulator_error: str
             trips.append(Trip(code="SIMULATOR_UNAVAILABLE", severity="CRITICAL", scope="system", detected_tick=tick,
                               message=simulator_error or "Simulator unreadable; showing the last trusted snapshot.",
                               required_actions=["FREEZE_AUTOMATION", "FULL_RESYNC"]))
+        if not state.meta.run_id.strip():
+            trips.append(Trip(code="RUN_ID_UNKNOWN", severity="CRITICAL", scope="system", detected_tick=tick,
+                              message="The snapshot carries no run id, so orders cannot be tied to a run.",
+                              required_actions=["FREEZE_AUTOMATION", "FULL_RESYNC"]))
         if state.meta.freshness == "RESET_UNCERTAIN":
             trips.append(Trip(code="RESET_UNCERTAIN", severity="CRITICAL", scope="system", detected_tick=tick,
                               message="Simulator reset detected; waiting for a full resync before trusting this run.",
@@ -44,10 +54,20 @@ def evaluate(state: NetworkState | None, plan: Plan | None, simulator_error: str
         if plan.planner_version == "fallback":
             trips.append(Trip(code="PRIMARY_PLANNER_FAILED", severity="WARNING", scope="system", detected_tick=tick,
                               message="; ".join(plan.warnings), required_actions=["USE_FALLBACK", "REQUIRE_MANUAL_REVIEW"]))
+        drifting = sorted({f"{f.station_id}/{f.fuel_type}" for f in plan.forecasts
+                           if f.error_mape is not None and f.error_ticks >= DRIFT_MIN_TICKS and f.error_mape > DRIFT_MAPE})
+        if drifting:
+            trips.append(Trip(code="FORECAST_DRIFT", severity="WARNING", scope="system", detected_tick=tick,
+                              message=f"Forecast error above {DRIFT_MAPE:.0%} for {', '.join(drifting)}. Treat recommendations with care.",
+                              required_actions=["ALERT"]))
         for risk in plan.risks:
             if "CONNECTIVITY_RISK" in risk.reason_codes:
                 trips.append(Trip(code="STATION_UNREACHABLE", severity="WARNING", scope=risk.station_id, detected_tick=tick,
                                   message=f"{risk.station_id} {risk.fuel_type}: {risk.reason}", required_actions=["ALERT"]))
+
+    for rec_id in expired_recommendations:
+        trips.append(Trip(code="RECOMMENDATION_EXPIRED", severity="WARNING", scope=rec_id, detected_tick=tick,
+                          message=f"{rec_id} expired before it was executed. A new plan replaces it.", required_actions=["REPLAN"]))
 
     if persistence_error:
         trips.append(Trip(code="PERSISTENCE_FAILURE", severity="CRITICAL", scope="system", detected_tick=tick,

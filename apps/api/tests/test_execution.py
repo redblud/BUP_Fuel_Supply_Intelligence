@@ -273,3 +273,16 @@ def test_crash_mid_execution_reloads_as_unknown_and_retries_with_same_key(api, t
     ok = c2.post(f"/api/recommendations/{rid}/approve")
     assert ok.json()["status"] == "DONE"
     assert sim2.posts[0]["idempotency_key"] == key
+
+
+def test_expired_recommendation_is_reported_once_as_a_warning(api) -> None:
+    from app.decision import orchestrator
+
+    c, _ = api()
+    rid = first_rec_id(c)
+    ctx = c.app.state.ctx
+    tick = ctx.state.latest.run.tick
+    expired = ctx.recommendation_states[rid].model_copy(update={"status": "EXPIRED", "updated_tick": tick})
+    ctx.recommendation_states = {**ctx.recommendation_states, rid: expired}
+    assert orchestrator.just_expired(ctx.recommendation_states, tick) == [rid]
+    assert orchestrator.just_expired(ctx.recommendation_states, tick + 1) == []
