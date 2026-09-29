@@ -12,6 +12,9 @@ from app.simulator.errors import SimulatorError
 from app.simulator.fake import FakeSimulatorClient
 from tests.helpers import fixture_data
 
+TOKEN = "test-token"
+AUTH = {"X-Operator-Token": TOKEN}
+
 
 class RecordingSim(FakeSimulatorClient):
     """Fixture reads plus a POST we control."""
@@ -32,8 +35,9 @@ class RecordingSim(FakeSimulatorClient):
 @pytest.fixture
 def api(tmp_path):
     def make(scenario: str = "route-disruption") -> tuple[TestClient, RecordingSim]:
-        settings = Settings(simulator_mode="fake", fixture_scenario=scenario, database_url=f"sqlite+aiosqlite:///{tmp_path / 'x.db'}")
-        c = TestClient(create_app(settings))
+        settings = Settings(simulator_mode="fake", fixture_scenario=scenario, database_url=f"sqlite+aiosqlite:///{tmp_path / 'x.db'}",
+        operator_token=TOKEN, demo_controls_enabled=True)
+        c = TestClient(create_app(settings), headers=AUTH)
         c.__enter__()
         ctx = c.app.state.ctx
         sim = RecordingSim(settings.fixture_dir, scenario)
@@ -211,8 +215,9 @@ def test_json_log_carries_context_fields() -> None:
 
 def restart(tmp_path, scenario: str = "route-disruption") -> tuple[TestClient, RecordingSim]:
     """A second API process on the same database file."""
-    settings = Settings(simulator_mode="fake", fixture_scenario=scenario, database_url=f"sqlite+aiosqlite:///{tmp_path / 'x.db'}")
-    c = TestClient(create_app(settings))
+    settings = Settings(simulator_mode="fake", fixture_scenario=scenario, database_url=f"sqlite+aiosqlite:///{tmp_path / 'x.db'}",
+        operator_token=TOKEN, demo_controls_enabled=True)
+    c = TestClient(create_app(settings), headers=AUTH)
     c.__enter__()
     sim = RecordingSim(settings.fixture_dir, scenario)
     c.app.state.ctx.state.client = sim

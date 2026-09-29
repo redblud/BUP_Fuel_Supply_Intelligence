@@ -5,6 +5,7 @@ import time
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from app.api.auth import audit, require_demo_controls, require_operator
 from app.api.deps import AppContext, get_ctx
 from app.api.routes.health import system_health
 from app.decision import orchestrator
@@ -92,8 +93,11 @@ async def get_automation(ctx: AppContext = Depends(get_ctx)) -> AutomationState:
     return ctx.automation
 
 
-@router.put("/automation", response_model=AutomationState, responses={409: {"model": ErrorBody}})
-async def set_automation(body: AutomationState, ctx: AppContext = Depends(get_ctx)) -> AutomationState:
+@router.put("/automation", response_model=AutomationState, responses={401: {"model": ErrorBody}, 409: {"model": ErrorBody}})
+async def set_automation(
+    body: AutomationState, ctx: AppContext = Depends(get_ctx), actor: str = Depends(require_operator)
+) -> AutomationState:
+    """Set the operating mode and kill switch. Needs the operator token; the actor is recorded."""
     if body.mode == "GUARDED_AUTO":
         state = await ctx.state.snapshot()
         plan = build_plan(state) if state is not None else None
@@ -104,6 +108,7 @@ async def set_automation(body: AutomationState, ctx: AppContext = Depends(get_ct
     ctx.automation = body
     await ctx.db.record("automation", body.model_dump_json())
     await repository.save_automation(ctx.db, body)
+    await audit(ctx, actor, "set_automation", f"{body.mode} kill_switch={body.kill_switch}")
     return ctx.automation
 
 
@@ -114,32 +119,53 @@ def _refuse(exc: orchestrator.DecisionError) -> HTTPException:
 @router.post(
     "/recommendations/{recommendation_id}/approve",
     response_model=RecommendationState,
-    responses={404: {"model": ErrorBody}, 409: {"model": ErrorBody}, 502: {"model": ErrorBody}, 503: {"model": ErrorBody}},
+    responses={
+        401: {"model": ErrorBody},
+        404: {"model": ErrorBody},
+        409: {"model": ErrorBody},
+        502: {"model": ErrorBody},
+        503: {"model": ErrorBody},
+    },
 )
-async def approve(recommendation_id: str, ctx: AppContext = Depends(get_ctx)) -> RecommendationState:
-    """Revalidate on a fresh snapshot, check kill switch, Tripwire and expiry, then execute once (idempotent)."""
+async def approve(
+    recommendation_id: str, ctx: AppContext = Depends(get_ctx), actor: str = Depends(require_operator)
+) -> RecommendationState:
+    """Revalidate on a fresh snapshot, check kill switch, Tripwire and expiry, then execute once (idempotent). Needs the operator token."""
     try:
-        return await orchestrator.approve(ctx, recommendation_id)
+        result = await orchestrator.approve(ctx, recommendation_id)
     except orchestrator.DecisionError as exc:
+        await audit(ctx, actor, "approve", recommendation_id, f"refused:{exc.code}")
         raise _refuse(exc) from exc
+    await audit(ctx, actor, "approve", recommendation_id, result.status)
+    return result
 
 
 @router.post(
     "/recommendations/{recommendation_id}/reject",
     response_model=RecommendationState,
-    responses={404: {"model": ErrorBody}, 409: {"model": ErrorBody}},
+    responses={401: {"model": ErrorBody}, 404: {"model": ErrorBody}, 409: {"model": ErrorBody}},
 )
-async def reject(recommendation_id: str, ctx: AppContext = Depends(get_ctx)) -> RecommendationState:
-    """Decline a proposed recommendation."""
+async def reject(
+    recommendation_id: str, ctx: AppContext = Depends(get_ctx), actor: str = Depends(require_operator)
+) -> RecommendationState:
+    """Decline a proposed recommendation. Needs the operator token."""
     try:
-        return await orchestrator.reject(ctx, recommendation_id)
+        result = await orchestrator.reject(ctx, recommendation_id)
     except orchestrator.DecisionError as exc:
+        await audit(ctx, actor, "reject", recommendation_id, f"refused:{exc.code}")
         raise _refuse(exc) from exc
+    await audit(ctx, actor, "reject", recommendation_id, result.status)
+    return result
 
 
-@router.post("/sim/control", response_model=dict, responses={501: {"model": ErrorBody}, 502: {"model": ErrorBody}})
-async def sim_control(body: SimControlRequest, ctx: AppContext = Depends(get_ctx)) -> dict:
-    """Demo controls proxied to simulator /admin/*. Never used by planning logic."""
+@router.post(
+    "/sim/control",
+    response_model=dict,
+    responses={401: {"model": ErrorBody}, 403: {"model": ErrorBody}, 501: {"model": ErrorBody}, 502: {"model": ErrorBody}},
+)
+async def sim_control(body: SimControlRequest, ctx: AppContext = Depends(get_ctx), actor: str = Depends(require_demo_controls)) -> dict:
+    """Demo controls proxied to simulator /admin/*. Needs the operator token and DEMO_CONTROLS_ENABLED. Never used by planning logic."""
+    await audit(ctx, actor, "sim_control", body.action)
     try:
         return await ctx.state.client.admin(body.action)
     except SimulatorError as exc:
