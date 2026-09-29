@@ -443,6 +443,17 @@ export interface components {
              */
             calibration: number;
             /**
+             * Error Mape
+             * @description Mean absolute percentage error of one-step-ahead backtest forecasts vs observed demand_liters; null if nothing scoreable.
+             */
+            error_mape?: number | null;
+            /**
+             * Error Ticks
+             * @description Observed ticks scored in error_mape.
+             * @default 0
+             */
+            error_ticks: number;
+            /**
              * Fuel Type
              * @enum {string}
              */

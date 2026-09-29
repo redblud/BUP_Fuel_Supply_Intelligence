@@ -494,6 +494,24 @@
             "title": "Calibration",
             "type": "number"
           },
+          "error_mape": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Mean absolute percentage error of one-step-ahead backtest forecasts vs observed demand_liters; null if nothing scoreable.",
+            "title": "Error Mape"
+          },
+          "error_ticks": {
+            "default": 0,
+            "description": "Observed ticks scored in error_mape.",
+            "title": "Error Ticks",
+            "type": "integer"
+          },
           "fuel_type": {
             "enum": [
               "DIESEL",
