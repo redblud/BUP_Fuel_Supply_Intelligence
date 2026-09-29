@@ -918,6 +918,95 @@
         "title": "Plan",
         "type": "object"
       },
+      "PlanApprovalItem": {
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Refusal code when outcome is REFUSED.",
+            "title": "Code"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "outcome": {
+            "enum": [
+              "EXECUTED",
+              "REFUSED"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "recommendation_id": {
+            "title": "Recommendation Id",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "PROPOSED",
+                  "APPROVED",
+                  "EXECUTING",
+                  "DONE",
+                  "FAILED",
+                  "EXPIRED",
+                  "SUPERSEDED",
+                  "REJECTED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "required": [
+          "recommendation_id",
+          "outcome"
+        ],
+        "title": "PlanApprovalItem",
+        "type": "object"
+      },
+      "PlanApprovalResult": {
+        "description": "Result of approving a whole plan in Manual Demo mode. Each recommendation was revalidated just before its POST.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PlanApprovalItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "stopped_early": {
+            "description": "True when a system-level refusal (kill switch, tripped guard, ...) ended the run.",
+            "title": "Stopped Early",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "stopped_early"
+        ],
+        "title": "PlanApprovalResult",
+        "type": "object"
+      },
       "ProjectionPoint": {
         "properties": {
           "incoming": {
@@ -1145,6 +1234,25 @@
               }
             ],
             "title": "Allocation Id"
+          },
+          "allocation_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "PENDING",
+                  "IN_TRANSIT",
+                  "ARRIVED",
+                  "FAILED",
+                  "CANCELLED"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Observed lifecycle of the allocation this created (PENDING, IN_TRANSIT, ARRIVED, ...); null until one exists.",
+            "title": "Allocation Status"
           },
           "message": {
             "anyOf": [
@@ -1818,6 +1926,7 @@
               "PERSISTENCE_FAILURE",
               "RUN_ID_UNKNOWN",
               "RECOMMENDATION_EXPIRED",
+              "RECOMMENDATION_CHANGED",
               "STATION_UNREACHABLE",
               "FORECAST_DRIFT",
               "PRIMARY_PLANNER_FAILED",
@@ -2502,6 +2611,92 @@
           }
         },
         "summary": "Get Plan",
+        "tags": [
+          "operations"
+        ]
+      }
+    },
+    "/api/plan/approve": {
+      "post": {
+        "description": "Manual Demo: approve every proposed recommendation of the current plan, one at a time.\n\nEach one is revalidated on a fresh snapshot just before its POST. A system-level refusal (kill switch, tripped guard,\nunavailable snapshot, unclear execution) stops the run; a refusal specific to one recommendation skips it.",
+        "operationId": "approve_plan_api_plan_approve_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-operator-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Operator-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-operator-name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Operator-Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanApprovalResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Approve Plan",
         "tags": [
           "operations"
         ]

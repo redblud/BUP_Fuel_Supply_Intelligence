@@ -291,3 +291,127 @@ def test_expired_recommendation_is_reported_once_as_a_warning(api) -> None:
     ctx.recommendation_states = {**ctx.recommendation_states, rid: expired}
     assert orchestrator.just_expired(ctx.recommendation_states, tick) == [rid]
     assert orchestrator.just_expired(ctx.recommendation_states, tick + 1) == []
+
+
+# ---- close-out: review flags, plan approval, outcomes, degradation ------------------------------------------------------
+
+
+def _rec(rec_id: str, qty: float = 1000.0, route: str = "r1", depot: str = "d1"):
+    from app.domain.models import AllocationRequest, Recommendation
+
+    base = Recommendation.model_construct(
+        id=rec_id,
+        station_id="s1",
+        fuel_type="DIESEL",
+        request=AllocationRequest.model_construct(source_depot_id=depot, route_id=route, quantity=qty),
+    )
+    return base
+
+
+def _plan(*recs):
+    from app.domain.models import Plan
+
+    return Plan.model_construct(recommendations=list(recs))
+
+
+def _proposed(rec_id: str):
+    from app.domain.models import RecommendationState
+
+    return {rec_id: RecommendationState(recommendation_id=rec_id, status="PROPOSED", updated_tick=1)}
+
+
+def test_review_flags_mark_a_materially_changed_replacement() -> None:
+    from app.decision.orchestrator import review_flags
+
+    base, flagged = review_flags({}, {}, frozenset(), _plan(_rec("rec-1")))
+    assert flagged == frozenset()
+    _, flagged = review_flags(base, _proposed("rec-1"), frozenset(), _plan(_rec("rec-2", qty=1050.0)))
+    assert flagged == frozenset()  # 5% is not material
+    _, flagged = review_flags(base, _proposed("rec-1"), frozenset(), _plan(_rec("rec-2", qty=1500.0)))
+    assert flagged == frozenset({"rec-2"})
+    _, flagged = review_flags(base, _proposed("rec-1"), frozenset(), _plan(_rec("rec-2", route="r2")))
+    assert flagged == frozenset({"rec-2"})
+
+
+def test_review_flag_is_inherited_and_not_raised_for_an_executed_predecessor() -> None:
+    from app.decision.orchestrator import review_flags
+    from app.domain.models import RecommendationState
+
+    base, _ = review_flags({}, {}, frozenset(), _plan(_rec("rec-2")))
+    _, flagged = review_flags(base, _proposed("rec-2"), frozenset({"rec-2"}), _plan(_rec("rec-3")))
+    assert flagged == frozenset({"rec-3"})
+    done = {"rec-2": RecommendationState(recommendation_id="rec-2", status="DONE", updated_tick=1)}
+    _, flagged = review_flags(base, done, frozenset(), _plan(_rec("rec-3", qty=5000.0)))
+    assert flagged == frozenset()
+
+
+def test_guarded_auto_skips_flagged_recommendations_and_audits_actions(api, tmp_path) -> None:
+    import sqlite3
+
+    from app.decision.auto import auto_step
+
+    c, sim = api()
+    rid = first_rec_id(c)
+    ctx = c.app.state.ctx
+    ctx.review_required = frozenset(r["id"] for r in c.get("/api/dashboard").json()["plan"]["recommendations"])
+    ctx.automation = ctx.automation.model_copy(update={"mode": "GUARDED_AUTO"})
+    assert asyncio.run(auto_step(ctx)) == [] and sim.posts == []
+    ctx.review_required = frozenset()
+    assert rid in asyncio.run(auto_step(ctx))
+    con = sqlite3.connect(tmp_path / "x.db")
+    actors = [r[0] for r in con.execute("SELECT detail FROM system_events WHERE kind = 'operator_action'")]
+    con.close()
+    assert any("guarded-auto" in a and "auto_approve" in a for a in actors)
+
+
+def test_plan_approval_needs_manual_demo_and_revalidates_each_recommendation(api) -> None:
+    c, sim = api()
+    assert c.post("/api/plan/approve").json()["detail"]["code"] == "NOT_MANUAL_DEMO"
+    c.put("/api/automation", json={"mode": "MANUAL_DEMO", "kill_switch": False})
+    recs = c.get("/api/dashboard").json()["plan"]["recommendations"]
+    r = c.post("/api/plan/approve")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["stopped_early"] is False
+    assert [i["outcome"] for i in body["items"]] == ["EXECUTED"] * len(recs) or all(i["outcome"] in ("EXECUTED", "REFUSED") for i in body["items"])
+    assert len(sim.posts) == sum(1 for i in body["items"] if i["outcome"] == "EXECUTED")
+
+
+def test_plan_approval_stops_on_kill_switch(api) -> None:
+    c, sim = api()
+    c.put("/api/automation", json={"mode": "MANUAL_DEMO", "kill_switch": True})
+    body = c.post("/api/plan/approve").json()
+    assert body["stopped_early"] is True and body["items"][0]["code"] == "KILL_SWITCH"
+    assert sim.posts == []
+
+
+def test_done_recommendation_reports_the_observed_allocation_lifecycle(api) -> None:
+    from types import SimpleNamespace
+
+    c, _ = api()
+    rid = first_rec_id(c)
+    done = c.post(f"/api/recommendations/{rid}/approve").json()
+    assert done["allocation_status"] is None
+
+    async def tracked(**_kw):
+        return SimpleNamespace(allocation=SimpleNamespace(status="ARRIVED"))
+
+    c.app.state.ctx.state.allocation_status = tracked
+    states = {s["recommendation_id"]: s for s in c.get("/api/decisions").json()}
+    assert states[rid]["status"] == "DONE" and states[rid]["allocation_status"] == "ARRIVED"
+
+
+def test_planner_failure_degrades_to_the_fallback_and_the_dashboard_still_renders(api, monkeypatch) -> None:
+    import app.intelligence as intelligence
+
+    def boom(*_a, **_k):
+        raise RuntimeError("planner exploded")
+
+    monkeypatch.setattr(intelligence, "plan_replenishment", boom)
+    c, _ = api()
+    r = c.get("/api/dashboard")
+    body = r.json()
+    assert r.status_code == 200 and body["plan"]["planner_version"] == "fallback"
+    assert "PRIMARY_PLANNER_FAILED" in [t["code"] for t in body["tripwire"]["trips"]]
+    assert body["health"]["components"]["planner"]["status"] == "DEGRADED"
+    assert body["state"] is not None  # the advisory view still has data

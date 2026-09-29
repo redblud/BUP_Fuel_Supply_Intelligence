@@ -16,6 +16,8 @@ from app.domain.models import (
     ErrorBody,
     NetworkState,
     Plan,
+    PlanApprovalItem,
+    PlanApprovalResult,
     RecommendationState,
     SimControlRequest,
 )
@@ -66,11 +68,13 @@ async def dashboard(ctx: AppContext = Depends(get_ctx)) -> DashboardResponse:
         detail=state.meta.freshness if state else "UNAVAILABLE",
     )
     if plan is not None:
-        ctx.recommendation_states = orchestrator.sync_lifecycle(ctx.recommendation_states, plan)
+        orchestrator.sync_plan(ctx, plan)
+    await orchestrator.track_outcomes(ctx)
     unknown = sum(1 for st in ctx.recommendation_states.values() if orchestrator.is_unknown(st))
     trip = tripwire.evaluate(state, plan, str(ctx.state.last_error) if ctx.state.last_error else None, unknown_executions=unknown,
                           persistence_error=ctx.state.persistence_error,
-                          expired_recommendations=orchestrator.just_expired(ctx.recommendation_states, state.run.tick) if state else ())
+                          expired_recommendations=orchestrator.just_expired(ctx.recommendation_states, state.run.tick) if state else (),
+                          review_required=sorted(ctx.review_required))
     if state is not None and (state.meta.stale or state.meta.freshness not in ("FRESH", "FIXTURE")):
         ctx.counters["snapshot_untrusted_polls"] += 1
     health.components["tripwire"] = ComponentHealth(status="HEALTHY" if trip.state == "CLEAR" else "DEGRADED", detail=trip.state)
@@ -110,6 +114,47 @@ async def set_automation(
     await repository.save_automation(ctx.db, body)
     await audit(ctx, actor, "set_automation", f"{body.mode} kill_switch={body.kill_switch}")
     return ctx.automation
+
+
+SYSTEM_REFUSALS = ("TRIPWIRE_TRIPPED", "KILL_SWITCH", "SNAPSHOT_UNAVAILABLE", "EXECUTION_UNKNOWN", "PERSISTENCE_FAILURE")
+
+
+@router.post(
+    "/plan/approve",
+    response_model=PlanApprovalResult,
+    responses={401: {"model": ErrorBody}, 409: {"model": ErrorBody}},
+)
+async def approve_plan(ctx: AppContext = Depends(get_ctx), actor: str = Depends(require_operator)) -> PlanApprovalResult:
+    """Manual Demo: approve every proposed recommendation of the current plan, one at a time.
+
+    Each one is revalidated on a fresh snapshot just before its POST. A system-level refusal (kill switch, tripped guard,
+    unavailable snapshot, unclear execution) stops the run; a refusal specific to one recommendation skips it.
+    """
+    if ctx.automation.mode != "MANUAL_DEMO":
+        raise HTTPException(409, detail={"code": "NOT_MANUAL_DEMO", "message": "Approving a whole plan needs MANUAL_DEMO mode."})
+    state = await ctx.state.refresh()
+    if state is None:
+        raise HTTPException(503, detail={"code": "SNAPSHOT_UNAVAILABLE", "message": "No fresh trusted snapshot; not executing."})
+    plan = build_plan(state)
+    orchestrator.sync_plan(ctx, plan)
+    items: list[PlanApprovalItem] = []
+    stopped = False
+    for rec in plan.recommendations:
+        st = ctx.recommendation_states.get(rec.id)
+        if st is None or st.status != "PROPOSED":
+            continue
+        try:
+            done = await orchestrator.approve(ctx, rec.id)
+        except orchestrator.DecisionError as exc:
+            await audit(ctx, actor, "approve_plan", rec.id, f"refused:{exc.code}")
+            items.append(PlanApprovalItem(recommendation_id=rec.id, outcome="REFUSED", code=exc.code, message=exc.message))
+            if exc.code in SYSTEM_REFUSALS:
+                stopped = True
+                break
+            continue
+        await audit(ctx, actor, "approve_plan", rec.id, done.status)
+        items.append(PlanApprovalItem(recommendation_id=rec.id, outcome="EXECUTED", status=done.status, message=done.message))
+    return PlanApprovalResult(items=items, stopped_early=stopped)
 
 
 def _refuse(exc: orchestrator.DecisionError) -> HTTPException:

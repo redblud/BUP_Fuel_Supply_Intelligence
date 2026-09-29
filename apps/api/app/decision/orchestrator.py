@@ -59,6 +59,74 @@ def sync_lifecycle(states: dict[str, RecommendationState], plan: Plan) -> dict[s
     return out
 
 
+QUANTITY_CHANGE = 0.10  # a replacement shipment differing by more than this from what was first proposed needs a human look
+
+
+def material_change(prev: Recommendation, current: Recommendation) -> bool:
+    """True when the replacement changes where the fuel comes from, which way it travels, or how much moves."""
+    if (prev.request.source_depot_id, prev.request.route_id) != (current.request.source_depot_id, current.request.route_id):
+        return True
+    return abs(current.request.quantity - prev.request.quantity) > QUANTITY_CHANGE * max(prev.request.quantity, 1.0)
+
+
+def _slots(plan: Plan) -> dict[str, tuple[str, str, int]]:
+    """Stable key per shipment: (station, fuel, nth shipment for that pair). Ids embed the tick, so they cannot be the key."""
+    seen: dict[tuple[str, str], int] = {}
+    out: dict[str, tuple[str, str, int]] = {}
+    for rec in plan.recommendations:
+        pair = (rec.station_id, rec.fuel_type)
+        seen[pair] = seen.get(pair, 0) + 1
+        out[rec.id] = (*pair, seen[pair])
+    return out
+
+
+def review_flags(
+    baselines: dict[tuple[str, str, int], Recommendation],
+    states: dict[str, RecommendationState],
+    flagged: frozenset[str],
+    plan: Plan,
+) -> tuple[dict[tuple[str, str, int], Recommendation], frozenset[str]]:
+    """Pure. Replans issue new ids each tick, so compare each recommendation with the still-PROPOSED one it replaced.
+
+    A material difference (or an earlier flag on the replaced one) marks the new recommendation as needing manual review.
+    Returns the updated baselines and the ids to review.
+    """
+    new_baselines = dict(baselines)
+    review: set[str] = set()
+    for rec_id, slot in _slots(plan).items():
+        rec = next(r for r in plan.recommendations if r.id == rec_id)
+        prev = baselines.get(slot)
+        new_baselines[slot] = rec
+        if prev is None:
+            continue
+        if prev.id == rec.id:
+            if rec.id in flagged:
+                review.add(rec.id)
+            continue
+        prev_state = states.get(prev.id)
+        if prev_state is not None and prev_state.status == "PROPOSED" and (prev.id in flagged or material_change(prev, rec)):
+            review.add(rec.id)
+    return new_baselines, frozenset(review)
+
+
+def sync_plan(ctx: AppContext, plan: Plan) -> None:
+    """Fold a fresh plan into the context: review flags first (they need the old states), then the lifecycle."""
+    ctx.baselines, ctx.review_required = review_flags(ctx.baselines, ctx.recommendation_states, ctx.review_required, plan)
+    ctx.recommendation_states = sync_lifecycle(ctx.recommendation_states, plan)
+
+
+async def track_outcomes(ctx: AppContext) -> None:
+    """Attach the observed allocation lifecycle (PENDING, IN_TRANSIT, ARRIVED, ...) to DONE recommendations."""
+    updated = dict(ctx.recommendation_states)
+    for rec_id, st in ctx.recommendation_states.items():
+        if st.status != "DONE" or st.allocation_id is None:
+            continue
+        tracked = await ctx.state.allocation_status(allocation_id=st.allocation_id)
+        if tracked is not None and tracked.allocation.status != st.allocation_status:
+            updated[rec_id] = st.model_copy(update={"allocation_status": tracked.allocation.status})
+    ctx.recommendation_states = updated
+
+
 def just_expired(states: dict[str, RecommendationState], tick: int) -> list[str]:
     """Ids that expired on this tick, so the Tripwire reports each expiry once instead of forever."""
     return sorted(rid for rid, st in states.items() if st.status == "EXPIRED" and st.updated_tick == tick)
@@ -97,7 +165,8 @@ def _trip(ctx: AppContext, state: NetworkState, plan: Plan, ignore_unknown_for: 
     unknown = sum(1 for s in ctx.recommendation_states.values() if is_unknown(s) and s.recommendation_id != ignore_unknown_for)
     return tripwire.evaluate(state, plan, str(ctx.state.last_error) if ctx.state.last_error else None, unknown_executions=unknown,
                              persistence_error=ctx.state.persistence_error,
-                             expired_recommendations=just_expired(ctx.recommendation_states, state.run.tick))
+                             expired_recommendations=just_expired(ctx.recommendation_states, state.run.tick),
+                             review_required=sorted(ctx.review_required))
 
 
 async def approve(ctx: AppContext, recommendation_id: str) -> RecommendationState:
@@ -114,7 +183,7 @@ async def approve(ctx: AppContext, recommendation_id: str) -> RecommendationStat
     if state is None:
         raise DecisionError("SNAPSHOT_UNAVAILABLE", "No fresh trusted snapshot; not executing.", 503)
     plan = build_plan(state)
-    ctx.recommendation_states = sync_lifecycle(ctx.recommendation_states, plan)
+    sync_plan(ctx, plan)
     rec = next((r for r in plan.recommendations if r.id == recommendation_id), None)
     if rec is None and existing is None:
         raise DecisionError("NOT_FOUND", "Unknown recommendation.", 404)
