@@ -4,7 +4,7 @@ The API calls `build_plan(state, policy)` and nothing else. Keep that signature 
 """
 
 from app.domain.models import NetworkState, Plan, Policy
-from app.intelligence.forecast import forecast_demand, project_inventory
+from app.intelligence.forecast import forecast_demand, project_depot_supply, project_inventory
 from app.intelligence.planner import PLANNER_VERSION, plan_replenishment
 from app.intelligence.risk import assess_risk
 
@@ -19,6 +19,7 @@ def build_plan(state: NetworkState, policy: Policy | None = None) -> Plan:
     """
     policy = policy or Policy()
     forecasts = forecast_demand(state, policy)
+    depot_projections = project_depot_supply(state, policy)
     projections = project_inventory(state, forecasts, policy)
     risks = assess_risk(state, projections)
     warnings: list[str] = []
@@ -33,6 +34,7 @@ def build_plan(state: NetworkState, policy: Policy | None = None) -> Plan:
         run_id=state.meta.run_id,
         planner_version=version,
         forecasts=forecasts,
+        depot_projections=depot_projections,
         projections=projections,
         risks=risks,
         recommendations=recommendations,

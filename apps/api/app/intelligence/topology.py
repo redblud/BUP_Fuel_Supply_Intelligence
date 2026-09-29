@@ -7,9 +7,12 @@ This answers reachability only; it never decides quantities.
 from app.domain.models import FuelType, NetworkState, Route
 
 
-def feasible_routes(state: NetworkState, station_id: str, fuel: FuelType) -> list[Route]:
-    """Routes that can ship this fuel now, fastest first: route AVAILABLE, depot shippable, depot has stock."""
+def reachable_routes(state: NetworkState, station_id: str) -> list[Route]:
+    """Available routes to an open station from a simulator-usable depot."""
     depots = {d.id: d for d in state.depots}
+    station = next((station for station in state.stations if station.id == station_id), None)
+    if station is None or station.status != "OPEN":
+        return []
     return sorted(
         (
             r
@@ -17,10 +20,16 @@ def feasible_routes(state: NetworkState, station_id: str, fuel: FuelType) -> lis
             if r.destination_station_id == station_id
             and r.status == "AVAILABLE"
             and r.source_depot_id in depots
-            and depots[r.source_depot_id].inventory.get(fuel, 0.0) > 0
+            and depots[r.source_depot_id].status in ("OPEN", "CONSTRAINED")
         ),
         key=lambda r: (r.transit_ticks, r.id),
     )
+
+
+def feasible_routes(state: NetworkState, station_id: str, fuel: FuelType) -> list[Route]:
+    """Reachable routes whose source currently holds the requested fuel."""
+    depots = {d.id: d for d in state.depots}
+    return [route for route in reachable_routes(state, station_id) if depots[route.source_depot_id].inventory.get(fuel, 0.0) > 0]
 
 
 def disrupted_routes(state: NetworkState, station_id: str) -> list[Route]:

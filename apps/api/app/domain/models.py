@@ -190,6 +190,16 @@ class Policy(BaseModel):
     history_calibration_ticks: int = 16
 
 
+class ForecastError(BaseModel):
+    """Measured one-step forecast error over recent demand observations."""
+
+    sample_count: int = Field(ge=0)
+    mae_liters: float | None = Field(default=None, ge=0)
+    rmse_liters: float | None = Field(default=None, ge=0)
+    wape_percent: float | None = Field(default=None, ge=0)
+    smape_percent: float | None = Field(default=None, ge=0)
+
+
 class Forecast(BaseModel):
     """Forecast of demand_liters (not served_liters) per tick."""
 
@@ -198,6 +208,7 @@ class Forecast(BaseModel):
     start_tick: int
     liters_per_tick: list[float]
     calibration: float = Field(description="alpha in forecast = alpha x structural demand.")
+    error: ForecastError = Field(description="Measured rolling error; unavailable for a cold start.")
     method: str
 
 
@@ -205,12 +216,24 @@ class ProjectionPoint(BaseModel):
     tick: int
     inventory: float
     incoming: float = 0.0
+    demand: float = 0.0
+    unmet_demand: float = 0.0
 
 
 class InventoryProjection(BaseModel):
     station_id: str
     fuel_type: FuelType
     safety_stock: float
+    minimum_projected_inventory: float
+    projected_shortage_liters: float
+    points: list[ProjectionPoint]
+
+
+class DepotSupplyProjection(BaseModel):
+    """Expected depot inventory after scheduled supply arrivals and crisis effects."""
+
+    depot_id: str
+    fuel_type: FuelType
     points: list[ProjectionPoint]
 
 
@@ -223,7 +246,19 @@ ReasonCode = Literal[
     "STATION_OUTAGE",
     "SCARCITY_LIMITED",
     "ROUTE_DISRUPTED",
+    "FUEL_SCARCITY",
+    "PROJECTED_SHORTAGE",
+    "DEMAND_PRESSURE",
+    "INCOMING_SUPPLY",
 ]
+
+
+class RiskDriver(BaseModel):
+    code: ReasonCode
+    value: float | None = None
+    unit: str | None = None
+    threshold: float | None = None
+    detail: str
 
 
 class RiskAssessment(BaseModel):
@@ -236,8 +271,15 @@ class RiskAssessment(BaseModel):
     projected_inventory_at_arrival: float | None
     projected_safety_breach_tick: int | None
     projected_stockout_tick: int | None
-    earliest_arrival_tick: int | None = Field(description="Earliest tick a new shipment could land; null if unreachable.")
+    time_to_safety_breach_ticks: int | None = Field(description="Ticks from the snapshot to the first safety-stock breach.")
+    time_to_stockout_ticks: int | None = Field(description="Ticks from the snapshot to projected zero inventory.")
+    projected_shortage_liters: float = Field(description="Cumulative forecast demand that cannot be served over the horizon.")
+    minimum_projected_inventory: float
+    coverage_ticks: float | None = Field(description="Current inventory divided by average forecast demand per tick, before incoming supply.")
+    coverage_hours: float | None
+    earliest_arrival_tick: int | None = Field(description="Earliest tick a new shipment from a currently stocked, reachable depot could land.")
     redundancy: int = Field(description="Number of currently feasible routes to this station for this fuel.")
+    risk_drivers: list[RiskDriver]
     reason: str
 
 
@@ -286,6 +328,7 @@ class Plan(BaseModel):
     run_id: str
     planner_version: str = Field(description="Planner that produced the recommendations, e.g. 'order-up-to-v0' or 'fallback'.")
     forecasts: list[Forecast]
+    depot_projections: list[DepotSupplyProjection]
     projections: list[InventoryProjection]
     risks: list[RiskAssessment]
     recommendations: list[Recommendation]
