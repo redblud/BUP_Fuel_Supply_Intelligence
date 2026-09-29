@@ -1,4 +1,3 @@
-// Aliases over the generated OpenAPI types. Never hand-write API shapes; run `npm run gen:api`.
 import type { components } from './generated/schema'
 
 type S = components['schemas']
@@ -13,3 +12,5 @@ export type SystemHealth = S['SystemHealth']
 export type ComponentHealth = S['ComponentHealth']
 export type AutomationState = S['AutomationState']
 export type SnapshotFreshness = S['SnapshotMeta']['freshness']
+export type TrackedAllocation = S['TrackedAllocation']
+export type RecommendationState = S['RecommendationState']
