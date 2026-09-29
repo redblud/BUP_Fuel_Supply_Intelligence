@@ -356,6 +356,31 @@ export interface components {
              */
             mode: "ADVISORY" | "GUARDED_AUTO" | "MANUAL_DEMO";
         };
+        /**
+         * BlockedCase
+         * @description A CRITICAL or HIGH station/fuel the planner could not send fuel to, and why. Never silently dropped.
+         */
+        BlockedCase: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "UNREACHABLE" | "DEPOT_EMPTY" | "DEPOT_BELOW_RESERVE" | "DISPATCH_FULL" | "STATION_TANK_FULL" | "BELOW_MIN_SHIPMENT";
+            /**
+             * Fuel Type
+             * @enum {string}
+             */
+            fuel_type: "DIESEL" | "PETROL" | "OCTANE";
+            /** Message */
+            message: string;
+            /**
+             * Priority
+             * @enum {string}
+             */
+            priority: "OK" | "WATCH" | "HIGH" | "CRITICAL";
+            /** Station Id */
+            station_id: string;
+        };
         /** ComponentHealth */
         ComponentHealth: {
             /** Detail */
@@ -535,6 +560,11 @@ export interface components {
         };
         /** Plan */
         Plan: {
+            /**
+             * Blocked
+             * @description Urgent stations with no recommendation, and why.
+             */
+            blocked?: components["schemas"]["BlockedCase"][];
             /** Forecasts */
             forecasts: components["schemas"]["Forecast"][];
             /**

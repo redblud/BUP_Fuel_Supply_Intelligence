@@ -20,6 +20,8 @@ from typing import NamedTuple
 from app.domain.models import (
     AllocationRequest,
     AlternativeAction,
+    BlockedCase,
+    BlockedCode,
     Depot,
     Forecast,
     FuelType,
@@ -32,9 +34,9 @@ from app.domain.models import (
     Station,
 )
 from app.intelligence.forecast import expected_arrival
-from app.intelligence.topology import arrival_tick, feasible_routes
+from app.intelligence.topology import arrival_tick, feasible_routes, open_routes
 
-PLANNER_VERSION = "order-up-to-v1"
+PLANNER_VERSION = "order-up-to-v2"
 MAX_SHIPMENTS_PER_STATION = 4
 WATER_FILL_ITERATIONS = 60
 FAIR_SHARE = "fair share of depot stock, balancing cover hours across stations"
@@ -57,6 +59,13 @@ class Option(NamedTuple):
     qty: float
     binding: str
     need: float
+
+
+class Blocked(NamedTuple):
+    """Why a candidate could not be given a shipment."""
+
+    code: BlockedCode
+    message: str
 
 
 class Candidate(NamedTuple):
@@ -89,7 +98,8 @@ def plan_replenishment(
     risks: list[RiskAssessment],
     projections: list[InventoryProjection],
     policy: Policy,
-) -> list[Recommendation]:
+) -> tuple[list[Recommendation], list[BlockedCase]]:
+    """Recommendations for urgent stations, plus a BlockedCase for each urgent station left without one."""
     now = state.run.tick
     ticks_per_hour = 60 / state.run.tick_minutes
     depots = {d.id: d for d in state.depots}
@@ -100,6 +110,7 @@ def plan_replenishment(
     # Shared budgets, consumed as we plan so later recommendations see earlier ones.
     depot_stock = {(d.id, f): v for d in state.depots for f, v in d.inventory.items()}
     dispatch_left = {d.id: d.dispatch_capacity_per_tick for d in state.depots}
+    initial_stock = dict(depot_stock)
     open_incoming: dict[tuple[str, str], float] = defaultdict(float)
     for alloc in state.allocations:
         if alloc.status == "PENDING":
@@ -109,9 +120,26 @@ def plan_replenishment(
     planned: dict[tuple[str, str], float] = defaultdict(float)
 
     candidates: list[Candidate] = []
+    blocked: list[BlockedCase] = []
+
+    def block(risk: RiskAssessment, why: Blocked) -> None:
+        blocked.append(BlockedCase(station_id=risk.station_id, fuel_type=risk.fuel_type, priority=risk.level, code=why.code, message=why.message))
+
     for risk in risks:
         station = stations[risk.station_id]
-        if risk.level not in ("CRITICAL", "HIGH") or risk.redundancy == 0 or station.status != "OPEN":
+        if risk.level not in ("CRITICAL", "HIGH") or station.status != "OPEN":
+            continue
+        if risk.redundancy == 0:
+            if not open_routes(state, station.id):
+                block(
+                    risk,
+                    Blocked(
+                        "UNREACHABLE",
+                        f"No open route reaches {station.name}: every route is disrupted, so this is a connectivity problem, not a fuel shortage.",
+                    ),
+                )
+            else:
+                block(risk, Blocked("DEPOT_EMPTY", f"Routes to {station.name} are open but no source depot holds any {risk.fuel_type}."))
             continue
         fc = fc_by_key[(station.id, risk.fuel_type)]
         cap = station.capacity.get(risk.fuel_type, 0.0)
@@ -152,12 +180,50 @@ def plan_replenishment(
     def first_viable(opts: Sequence[Option]) -> Option | None:
         return next((o for o in opts if o.qty >= policy.min_shipment_liters), None)
 
-    def shipment(c: Candidate, pending: Sequence[Candidate]) -> tuple[Option, float, str, list[Option]] | None:
+    def stress_line(c: Candidate, chosen: Option, qty: float) -> str:
+        """Stress margin before and cover after, in the units an operator thinks in."""
+        margin = chosen.at_arrival - c.risk.safety_stock
+        side = "above" if margin >= 0 else "below"
+        cover_hours = (chosen.at_arrival + qty) / c.rate_per_hour
+        return f"Without this shipment the station lands {abs(margin):,.0f} L {side} safety stock; with it, about {cover_hours:,.1f} h of cover."
+
+    def why_not_viable(c: Candidate, opts: Sequence[Option]) -> Blocked:
+        """Explain the limit that keeps even the best route below the minimum shipment."""
+        best = max(opts, key=lambda o: o.qty)
+        depot = depots[best.route.source_depot_id]
+        minimum = f"{policy.min_shipment_liters:,.0f} L minimum shipment"
+        taken = initial_stock[(depot.id, c.fuel)] - depot_stock[(depot.id, c.fuel)]
+        if best.binding.startswith("depot") and taken > 0:
+            return Blocked(
+                "BELOW_MIN_SHIPMENT",
+                f"Higher-priority stations already take {taken:,.0f} L {c.fuel} from {depot.name}; "
+                f"{budget_left(depot, c.fuel):,.0f} L remain to release, under the {minimum}.",
+            )
+        if best.binding == "depot stock above reserve":
+            spare = max(depot_stock[(depot.id, c.fuel)] - reserve_of(depot, c.fuel), 0.0)
+            return Blocked(
+                "DEPOT_BELOW_RESERVE",
+                f"{depot.name} holds {depot_stock[(depot.id, c.fuel)]:,.0f} L {c.fuel}; after its {reserve_of(depot, c.fuel):,.0f} L reserve "
+                f"only {spare:,.0f} L can be released, under the {minimum}.",
+            )
+        if best.binding == "depot dispatch capacity this tick":
+            return Blocked(
+                "DISPATCH_FULL",
+                f"{depot.name} has {max(dispatch_left[depot.id], 0.0):,.0f} L of dispatch capacity left this tick, under the {minimum}.",
+            )
+        if best.binding == "station capacity now":
+            return Blocked(
+                "STATION_TANK_FULL",
+                f"{c.station.name}'s {c.fuel} tank cannot take another {policy.min_shipment_liters:,.0f} L once fuel already in transit lands.",
+            )
+        return Blocked("BELOW_MIN_SHIPMENT", f"{c.station.name} needs only {max(best.need, 0.0):,.0f} L more {c.fuel}, under the {minimum}.")
+
+    def shipment(c: Candidate, pending: Sequence[Candidate]) -> tuple[Option, float, str, list[Option]] | Blocked:
         """One shipment for `c`: its first viable route, cut to its fair share of the depot it draws on."""
         opts = options(c)
         chosen = first_viable(opts)
         if chosen is None:
-            return None
+            return why_not_viable(c, opts)
         depot_id = chosen.route.source_depot_id
         group = [(c, chosen)]
         for other in pending:
@@ -166,13 +232,20 @@ def plan_replenishment(
                 group.append((other, other_option))
         while True:
             wants = [Want(o.at_arrival, p.rate_per_hour, min(o.route.max_shipment, max(o.need, 0.0))) for p, o in group]
-            shares = fair_shares(budget_left(depots[depot_id], c.fuel), wants)
+            budget = budget_left(depots[depot_id], c.fuel)
+            shares = fair_shares(budget, wants)
+            mine = next(i for i, (p, _) in enumerate(group) if p is c)
+            if shares[mine] < policy.min_shipment_liters:
+                return Blocked(
+                    "BELOW_MIN_SHIPMENT",
+                    f"{depots[depot_id].name} can release {budget:,.0f} L {c.fuel}, shared across {len(group)} stations; "
+                    f"{c.station.name}'s fair share, {shares[mine]:,.0f} L, is under the {policy.min_shipment_liters:,.0f} L minimum shipment. "
+                    "Stations with less cover are served first.",
+                )
             starved = {i for i, share in enumerate(shares) if share < policy.min_shipment_liters}
             if not starved:
                 break
             group = [g for i, g in enumerate(group) if i not in starved]
-            if not any(p is c for p, _ in group):
-                return None
         share = shares[next(i for i, (p, _) in enumerate(group) if p is c)]
         qty = float(int(min(share, chosen.qty)))
         binding = FAIR_SHARE if len(group) > 1 and share < chosen.qty else chosen.binding
@@ -186,7 +259,9 @@ def plan_replenishment(
         for c in list(pending):
             key = (c.station.id, c.fuel)
             result = shipment(c, pending)
-            if result is None:
+            if isinstance(result, Blocked):
+                if shipments[key] == 0:
+                    block(c.risk, result)
                 pending.remove(c)
                 continue
             chosen, qty, binding, opts = result
@@ -227,6 +302,7 @@ def plan_replenishment(
                         c.risk.reason,
                         f"Fastest feasible route ({route.transit_ticks} ticks transit, {c.risk.redundancy} feasible route(s)).",
                         f"Quantity limited by {binding}.",
+                        stress_line(c, chosen, qty),
                     ],
                     alternatives=[
                         AlternativeAction(
@@ -248,4 +324,4 @@ def plan_replenishment(
         if not progressed or not pending:
             break
     order = {(c.station.id, c.fuel): i for i, c in enumerate(candidates)}
-    return sorted(recs, key=lambda r: order[(r.station_id, r.fuel_type)])
+    return sorted(recs, key=lambda r: order[(r.station_id, r.fuel_type)]), blocked
