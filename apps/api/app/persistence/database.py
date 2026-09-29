@@ -1,32 +1,34 @@
 """SQLite (WAL) via async SQLAlchemy. Owner: Developer 1 (observations) / Developer 4 (decisions, audit).
 
-Foundation only proves backend -> SQLAlchemy -> SQLite -> persistent volume.
-Add real tables through Alembic migrations as features land.
+The schema is owned by Alembic (`alembic/versions`); `Database.init` upgrades to head at startup.
+Table definitions live in `app/persistence/models.py`, queries in `app/persistence/repository.py`.
 """
 
-from datetime import UTC, datetime
+import asyncio
 from pathlib import Path
 
-from sqlalchemy import DateTime, String, event, func, select, text
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import event, func, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+from app.persistence.models import SystemEvent
+
+# apps/api locally, /app in Docker: both hold alembic.ini next to the `app` package.
+API_ROOT = Path(__file__).resolve().parents[2]
 
 
-class Base(DeclarativeBase):
-    pass
-
-
-class SystemEvent(Base):
-    __tablename__ = "system_events"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    kind: Mapped[str] = mapped_column(String(64))
-    detail: Mapped[str] = mapped_column(String(500), default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+def migrate(url: str) -> None:
+    """Upgrade the database at `url` to the latest revision. Blocking; call via a thread from async code."""
+    cfg = Config(str(API_ROOT / "alembic.ini"))
+    cfg.set_main_option("script_location", str(API_ROOT / "migrations"))
+    cfg.attributes["sqlalchemy_url"] = url
+    command.upgrade(cfg, "head")
 
 
 class Database:
     def __init__(self, url: str) -> None:
+        self.url = url
         if url.startswith("sqlite") and ":///" in url:
             Path(url.split(":///", 1)[1]).parent.mkdir(parents=True, exist_ok=True)
         self.engine: AsyncEngine = create_async_engine(url)
@@ -40,9 +42,7 @@ class Database:
             cur.close()
 
     async def init(self) -> None:
-        # TODO(dev4): replace create_all with Alembic migrations once real tables exist.
-        async with self.engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+        await asyncio.to_thread(migrate, self.url)
         await self.record("startup")
 
     async def record(self, kind: str, detail: str = "") -> None:
