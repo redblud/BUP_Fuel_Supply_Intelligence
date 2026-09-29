@@ -7,6 +7,7 @@ services:
     environment:
       FIXTURE_DIR: /fixtures
       DATABASE_URL: sqlite+aiosqlite:////data/fuelops.db
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
       OPERATOR_TOKEN: ${OPERATOR_TOKEN:-}
       DEMO_CONTROLS_ENABLED: ${DEMO_CONTROLS_ENABLED:-false}
     ports:

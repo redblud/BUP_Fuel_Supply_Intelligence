@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.deps import AppContext
-from app.api.routes import health, history, metrics, operations
+from app.api.routes import ai, health, history, metrics, operations
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.decision.auto import AutoRunner
@@ -68,6 +68,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         auto.start()
         yield
         await auto.stop()
+        if app.state.ctx.ai_client is not None:
+            await app.state.ctx.ai_client.aclose()
         if sync is not None:
             await sync.stop()
         await client.close()
@@ -79,6 +81,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(operations.router)
     app.include_router(history.router)
     app.include_router(metrics.router)
+    app.include_router(ai.router)
     return app
 
 

@@ -30,6 +30,12 @@ class Settings(BaseSettings):
 
     database_url: str = f"sqlite+aiosqlite:///{REPO_ROOT / 'data' / 'fuelops.db'}"
 
+    # Optional AI briefing via Groq (OpenAI-compatible API). No key = the briefing endpoint answers 503 AI_NOT_CONFIGURED.
+    groq_api_key: str = ""
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+    groq_model: str = "llama-3.3-70b-versatile"
+    ai_timeout: float = 20.0
+
     # Shared secret for approve, reject, mode/kill switch and demo controls. Empty keeps those routes closed.
     operator_token: str = ""
     demo_controls_enabled: bool = False

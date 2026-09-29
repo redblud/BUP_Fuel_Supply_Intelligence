@@ -2,6 +2,7 @@ import asyncio
 from collections import Counter
 from dataclasses import dataclass, field
 
+import httpx
 from fastapi import Request
 
 from app.core.config import Settings
@@ -22,6 +23,7 @@ class AppContext:
     planner_seconds: float | None = None
     baselines: dict[tuple[str, str, int], Recommendation] = field(default_factory=dict)
     review_required: frozenset[str] = frozenset()
+    ai_client: httpx.AsyncClient | None = None  # created on first AI request; tests inject one
 
 
 def get_ctx(request: Request) -> AppContext:

@@ -87,3 +87,7 @@ for one depot), and real recordings from the simulator.
 - `POST /api/sim/control` also needs `DEMO_CONTROLS_ENABLED=true`; otherwise `403 DEMO_CONTROLS_DISABLED`.
 - Optional `X-Operator-Name` labels the actor in the audit record (`system_events`, kind `operator_action`). It is a label, not an identity.
 - Guarded Auto executes through the gateway without a token; auditing those automatic actions is tracked separately (#19).
+
+## AI briefing (optional)
+
+`POST /api/ai/brief` (operator token) returns `AiBrief`: a short Groq-written briefing, or an answer to `question`, grounded in the current snapshot, risks, recommendations and guard status. It is advisory text only and changes nothing; it carries the `freshness` of the data it was written from. Set `GROQ_API_KEY` (model via `GROQ_MODEL`, default `llama-3.3-70b-versatile`). Errors use the shared shape: `503 AI_NOT_CONFIGURED`, `409 SNAPSHOT_UNAVAILABLE`, `502 AI_UPSTREAM_ERROR | AI_BAD_RESPONSE | AI_UNREACHABLE`, `504 AI_TIMEOUT`. Only derived facts are sent (no raw simulator payloads, tokens or operator names).
