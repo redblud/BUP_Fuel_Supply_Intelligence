@@ -7,6 +7,8 @@ served by FakeSimulatorClient. Scenarios:
   route-disruption  tick 40: Dhaka demand spike x1.8, route-gazipur-mirpur DISRUPTED,
                     one diesel shipment in transit to Tongi, Tongi diesel at risk
   stale             route-disruption with X-Simulator-Stale on every read
+  scarcity          tick 40: Mirpur and Tongi are both low on diesel and can only draw on Gazipur
+                    (route-patiya-mirpur DISRUPTED), whose diesel above its reserve covers neither
 
 Representative, not recorded. Replace with real recordings once the simulator runs
 (docs/simulator-semantics.md). Run from apps/api:
@@ -157,9 +159,26 @@ def build(TICK: int, crisis: bool) -> dict:
     return raw
 
 
+def scarcity(base: dict) -> dict:
+    """route-disruption with one depot too thin to refill the two thirsty stations that depend on it."""
+    raw = copy.deepcopy(base)
+    raw["routes"] = [{**r, "status": "DISRUPTED" if r["id"] == "route-patiya-mirpur" else "AVAILABLE"} for r in raw["routes"]]
+    raw["allocations"] = []
+    raw["events"] = [e for e in raw["events"] if e["type"] != "route_disruption"]
+    raw["metrics"]["allocation_liters"] = 0
+    for depot in raw["depots"]:
+        if depot["id"] == "depot-gazipur":
+            depot["inventory"]["DIESEL"] = 13500  # 9000 L reserve (10% of 90000) leaves 4500 L to give
+    for station in raw["stations"]:
+        if station["id"] in ("station-mirpur", "station-tongi"):
+            station["inventory"]["DIESEL"] = 1500 if station["id"] == "station-mirpur" else 3500
+    return raw
+
+
 def main() -> None:
     scenarios = {"normal": build(0, crisis=False), "route-disruption": build(40, crisis=True)}
     scenarios["stale"] = {**scenarios["route-disruption"], "stale": True}
+    scenarios["scarcity"] = scarcity(scenarios["route-disruption"])
     for name, raw in scenarios.items():
         (OUT / f"{name}.json").write_text(json.dumps(raw, indent=1) + "\n", encoding="utf-8")
         print(f"wrote {OUT / name}.json")
