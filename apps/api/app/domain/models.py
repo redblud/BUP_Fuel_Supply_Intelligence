@@ -271,7 +271,13 @@ class RiskAssessment(BaseModel):
     projected_inventory_at_arrival: float | None
     projected_safety_breach_tick: int | None
     projected_stockout_tick: int | None
-    earliest_arrival_tick: int | None = Field(description="Earliest tick a new shipment could land; null if unreachable.")
+    hours_to_safety_breach: float | None = Field(
+        default=None, description="Simulated hours from now to projected_safety_breach_tick; null if none in the horizon."
+    )
+    hours_to_stockout: float | None = Field(
+        default=None, description="Simulated hours from now to projected_stockout_tick; null if none in the horizon."
+    )
+    earliest_arrival_tick: int | None = Field(description="Earliest tick a new shipment could land; null if unreachable or no depot has stock.")
     redundancy: int = Field(description="Number of currently feasible routes to this station for this fuel.")
     reason: str
 

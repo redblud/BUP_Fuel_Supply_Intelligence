@@ -124,3 +124,25 @@ def test_spike_ending_inside_the_horizon_is_not_forecast_to_last_forever() -> No
         assert forecast.liters_per_tick[i] == pytest.approx(
             structural_demand(state, mirpur, "DIESEL", tick, multiplier) * forecast.calibration, rel=1e-3
         )
+
+
+def _with_spike(state: NetworkState, parameters: dict) -> NetworkState:
+    """route-disruption with its spike's parameters replaced; station multipliers reset so only the event explains them."""
+    spike = state.events[1].model_copy(update={"parameters": parameters})
+    return state.model_copy(update={"events": [state.events[0], spike]})
+
+
+@pytest.mark.parametrize(
+    ("parameters", "hit"),
+    [
+        ({"multiplier": 1.8}, {"station-mirpur", "station-tongi", "station-karnaphuli", "station-coxsbazar"}),  # no filters: every station
+        ({"multiplier": 1.8, "region_ids": []}, {"station-mirpur", "station-tongi", "station-karnaphuli", "station-coxsbazar"}),
+        ({"multiplier": 1.8, "station_ids": ["station-tongi"]}, {"station-tongi"}),
+        ({"multiplier": 1.8, "region_ids": ["region-chattogram"]}, {"station-karnaphuli", "station-coxsbazar"}),
+    ],
+)
+def test_spike_filters_follow_the_simulator_guide(parameters: dict, hit: set[str]) -> None:
+    state = _with_spike(load_state("route-disruption"), parameters)
+    for station in state.stations:
+        expected = 1.8 if station.id in hit else 1.0
+        assert multiplier_at(state, station, 30) / multiplier_at(state, station, 23) == pytest.approx(expected)

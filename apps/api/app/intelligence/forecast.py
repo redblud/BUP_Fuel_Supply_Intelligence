@@ -19,6 +19,7 @@ from app.domain.models import (
     NetworkState,
     Policy,
     ProjectionPoint,
+    SimEvent,
     Station,
 )
 
@@ -58,14 +59,22 @@ def structural_demand(state: NetworkState, station: Station, fuel: FuelType, tic
     return daily / ticks_per_day * hour_factor(station.demand_profile, sim_time.hour) * region_factor * live
 
 
+SPIKE_DEFAULT_MULTIPLIER = 1.5  # simulator default when a demand_spike gives no multiplier (guide §7.8)
+
+
+def _spike_applies(event: SimEvent, station: Station) -> bool:
+    """station_ids and region_ids are filters; an empty or missing list means every station (guide §7.8)."""
+    station_ids = event.parameters.get("station_ids") or []
+    region_ids = event.parameters.get("region_ids") or []
+    return (not station_ids or station.id in station_ids) and (not region_ids or station.region_id in region_ids)
+
+
 def _spike_factor(state: NetworkState, station: Station, tick: int) -> float:
-    """Product of demand_spike multipliers covering this station's region at `tick`."""
+    """Product of the demand_spike multipliers that apply to this station at `tick`."""
     factor = 1.0
     for event in state.events:
-        if event.type != "demand_spike" or not event.start_tick <= tick < event.end_tick:
-            continue
-        if station.region_id in event.parameters.get("region_ids", []):
-            factor *= float(event.parameters.get("multiplier", 1.0))
+        if event.type == "demand_spike" and event.start_tick <= tick < event.end_tick and _spike_applies(event, station):
+            factor *= float(event.parameters.get("multiplier", SPIKE_DEFAULT_MULTIPLIER))
     return factor
 
 
