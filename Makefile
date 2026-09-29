@@ -1,4 +1,4 @@
-.PHONY: up up-sim down logs backend frontend backend-test backend-lint frontend-build frontend-lint contracts fixtures check
+.PHONY: demo-backend demo-frontend up up-sim down logs backend frontend backend-test backend-lint frontend-build frontend-lint contracts fixtures check
 
 up:
 	docker compose up --build
@@ -11,6 +11,13 @@ down:
 
 logs:
 	docker compose logs -f
+
+# Offline demo: the stateful demo simulator accepts allocations. Operator token is "demo". See docs/demo.md.
+demo-backend:
+	cd apps/api && OPERATOR_TOKEN=demo DEMO_CONTROLS_ENABLED=true SIMULATOR_MODE=demo FIXTURE_SCENARIO=route-disruption DATABASE_URL=sqlite+aiosqlite:///./demo.db uv run uvicorn app.main:app --port 8000
+
+demo-frontend:
+	cd apps/web && npm run dev
 
 backend:
 	cd apps/api && uv run uvicorn app.main:app --reload --port 8000

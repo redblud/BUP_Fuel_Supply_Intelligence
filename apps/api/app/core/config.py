@@ -17,7 +17,8 @@ class Settings(BaseSettings):
     log_format: Literal["json", "text"] = "json"
 
     # "fake" serves tests/fixtures/<fixture_scenario>.json; "real" talks to the BUP simulator.
-    simulator_mode: Literal["fake", "real"] = "fake"
+    # "demo" is a small stateful stand-in that accepts allocations (for demos).
+    simulator_mode: Literal["fake", "real", "demo"] = "fake"
     simulator_base_url: str = "http://simulator:8000"
     simulator_connect_timeout: float = 2.0
     simulator_read_timeout: float = 5.0
