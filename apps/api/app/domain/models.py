@@ -26,6 +26,8 @@ FuelLiters = dict[FuelType, float]
 class RunInfo(BaseModel):
     """Simulator `/v1/instance`."""
 
+    # Additive field: the simulator instance identity is a reset signal (D7).
+    id: int | str | None = None
     scenario_id: str
     scenario_version: str
     seed: int
@@ -186,18 +188,8 @@ class Policy(BaseModel):
     target_fill_fraction: float = 0.9
     depot_reserve_fraction: float = 0.1
     min_shipment_liters: float = 500.0
-    recommendation_ttl_ticks: int = 4
+    recommendation_ttl_ticks: int = 96
     history_calibration_ticks: int = 16
-
-
-class ForecastError(BaseModel):
-    """Measured one-step forecast error over recent demand observations."""
-
-    sample_count: int = Field(ge=0)
-    mae_liters: float | None = Field(default=None, ge=0)
-    rmse_liters: float | None = Field(default=None, ge=0)
-    wape_percent: float | None = Field(default=None, ge=0)
-    smape_percent: float | None = Field(default=None, ge=0)
 
 
 class Forecast(BaseModel):
@@ -208,7 +200,6 @@ class Forecast(BaseModel):
     start_tick: int
     liters_per_tick: list[float]
     calibration: float = Field(description="alpha in forecast = alpha x structural demand.")
-    error: ForecastError = Field(description="Measured rolling error; unavailable for a cold start.")
     method: str
 
 
@@ -216,24 +207,12 @@ class ProjectionPoint(BaseModel):
     tick: int
     inventory: float
     incoming: float = 0.0
-    demand: float = 0.0
-    unmet_demand: float = 0.0
 
 
 class InventoryProjection(BaseModel):
     station_id: str
     fuel_type: FuelType
     safety_stock: float
-    minimum_projected_inventory: float
-    projected_shortage_liters: float
-    points: list[ProjectionPoint]
-
-
-class DepotSupplyProjection(BaseModel):
-    """Expected depot inventory after scheduled supply arrivals and crisis effects."""
-
-    depot_id: str
-    fuel_type: FuelType
     points: list[ProjectionPoint]
 
 
@@ -246,19 +225,7 @@ ReasonCode = Literal[
     "STATION_OUTAGE",
     "SCARCITY_LIMITED",
     "ROUTE_DISRUPTED",
-    "FUEL_SCARCITY",
-    "PROJECTED_SHORTAGE",
-    "DEMAND_PRESSURE",
-    "INCOMING_SUPPLY",
 ]
-
-
-class RiskDriver(BaseModel):
-    code: ReasonCode
-    value: float | None = None
-    unit: str | None = None
-    threshold: float | None = None
-    detail: str
 
 
 class RiskAssessment(BaseModel):
@@ -271,15 +238,8 @@ class RiskAssessment(BaseModel):
     projected_inventory_at_arrival: float | None
     projected_safety_breach_tick: int | None
     projected_stockout_tick: int | None
-    time_to_safety_breach_ticks: int | None = Field(description="Ticks from the snapshot to the first safety-stock breach.")
-    time_to_stockout_ticks: int | None = Field(description="Ticks from the snapshot to projected zero inventory.")
-    projected_shortage_liters: float = Field(description="Cumulative forecast demand that cannot be served over the horizon.")
-    minimum_projected_inventory: float
-    coverage_ticks: float | None = Field(description="Current inventory divided by average forecast demand per tick, before incoming supply.")
-    coverage_hours: float | None
-    earliest_arrival_tick: int | None = Field(description="Earliest tick a new shipment from a currently stocked, reachable depot could land.")
+    earliest_arrival_tick: int | None = Field(description="Earliest tick a new shipment could land; null if unreachable.")
     redundancy: int = Field(description="Number of currently feasible routes to this station for this fuel.")
-    risk_drivers: list[RiskDriver]
     reason: str
 
 
@@ -301,6 +261,31 @@ class AlternativeAction(BaseModel):
     rejected_because: str
 
 
+BlockedCaseCode = Literal[
+    "STATION_UNREACHABLE",
+    "STATION_OUTAGE",
+    "DEPOT_BELOW_RESERVE",
+    "DISPATCH_CAPACITY_FULL",
+    "STATION_CAPACITY_FULL",
+    "MIN_SHIPMENT",
+    "ALREADY_COVERED",
+]
+
+
+class BlockedCase(BaseModel):
+    """A high/critical risk for which the planner could not form a safe executable shipment."""
+
+    id: str = Field(description="Deterministic identifier for this blocked case at the current tick.")
+    station_id: str
+    fuel_type: FuelType
+    reason_code: BlockedCaseCode
+    summary: str = Field(description="Single-line operator-facing explanation.")
+    factors: list[str] = Field(default_factory=list)
+
+
+ConfidenceLevel = Literal["HIGH", "MEDIUM", "LOW", "INSUFFICIENT_DATA"]
+
+
 class Recommendation(BaseModel):
     id: str = Field(description="Deterministic: same NetworkState + Policy -> same id.")
     station_id: str
@@ -317,6 +302,14 @@ class Recommendation(BaseModel):
     projected_safety_breach_tick: int | None
     projected_stockout_tick: int | None
     stress_margin_liters: float = Field(description="Projected inventory at arrival minus safety stock, without this shipment.")
+    projected_stockout_ticks_avoided: int = Field(ge=0, description="Forecast-horizon stockout ticks avoided by this shipment versus no shipment.")
+    projected_unmet_demand_liters_avoided: float = Field(ge=0, description="Forecast-horizon unmet demand liters avoided by this shipment versus no shipment.")
+    inventory_at_arrival_without_liters: float = Field(ge=0, description="Projected inventory at the shipment arrival tick without the recommended shipment.")
+    inventory_at_arrival_with_liters: float = Field(ge=0, description="Projected inventory at the shipment arrival tick including the recommended shipment, capped by station capacity.")
+    forecast_error_mae_liters_per_tick: float | None = Field(default=None, ge=0, description="Measured recent absolute forecast error (MAE); no probabilistic interpretation.")
+    forecast_error_band_liters_per_tick: float | None = Field(default=None, ge=0, description="Measured recent maximum absolute forecast error band; no probabilistic interpretation.")
+    confidence: ConfidenceLevel = Field(description="Qualitative robustness label derived only from measured forecast error and the recommendation's stress margin.")
+    confidence_basis: str = Field(description="Human-readable, non-probabilistic basis for the confidence label.")
     summary: str
     factors: list[str]
     alternatives: list[AlternativeAction]
@@ -328,10 +321,13 @@ class Plan(BaseModel):
     run_id: str
     planner_version: str = Field(description="Planner that produced the recommendations, e.g. 'order-up-to-v0' or 'fallback'.")
     forecasts: list[Forecast]
-    depot_projections: list[DepotSupplyProjection]
     projections: list[InventoryProjection]
     risks: list[RiskAssessment]
     recommendations: list[Recommendation]
+    blocked_cases: list[BlockedCase] = Field(
+        default_factory=list,
+        description="High/critical risks for which no safe executable recommendation could be formed.",
+    )
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -352,6 +348,8 @@ TripCode = Literal[
     "FORECAST_DRIFT",
     "PRIMARY_PLANNER_FAILED",
     "STATE_SYNC_SUSPECT",
+    "KILL_SWITCH_ON",
+    "SSE_DISCONNECTED",
 ]
 TripAction = Literal["ALERT", "REPLAN", "USE_FALLBACK", "REQUIRE_MANUAL_REVIEW", "FREEZE_AUTOMATION", "FULL_RESYNC"]
 
@@ -359,6 +357,7 @@ TripAction = Literal["ALERT", "REPLAN", "USE_FALLBACK", "REQUIRE_MANUAL_REVIEW",
 class Trip(BaseModel):
     code: TripCode
     severity: Literal["CRITICAL", "WARNING"]
+    classification: Literal["HARD", "SOFT", "INFO"] = "HARD"
     message: str
     scope: str = Field(description="What is affected: 'system', a station id, a recommendation id, ...")
     detected_tick: int | None
@@ -400,6 +399,11 @@ class RecommendationState(BaseModel):
 class AutomationState(BaseModel):
     mode: OperatingMode
     kill_switch: bool = Field(description="When true, nothing executes, in any mode.")
+    max_quantity_per_allocation: float = 0.0
+    max_liters_per_hour: float = 0.0
+    allowed_fuels: list[FuelType] = Field(default_factory=lambda: list(FUEL_TYPES))
+    ttl_minutes: int = 30
+    mode_expires_at: datetime | None = None
 
 
 class DashboardResponse(BaseModel):
@@ -422,3 +426,37 @@ class SimControlRequest(BaseModel):
 class ErrorBody(BaseModel):
     code: str
     message: str
+
+class ApprovalRequest(BaseModel):
+    confirm_override: bool = False
+    override_reason: str | None = Field(default=None, max_length=500)
+
+
+class AutomationUpdateRequest(BaseModel):
+    mode: OperatingMode
+    max_quantity_per_allocation: float = Field(default=0.0, ge=0)
+    max_liters_per_hour: float = Field(default=0.0, ge=0)
+    allowed_fuels: list[FuelType] = Field(default_factory=lambda: list(FUEL_TYPES), min_length=1)
+    ttl_minutes: int = Field(default=30, ge=1, le=120)
+
+
+class KillSwitchRequest(BaseModel):
+    confirm: bool = False
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class DemoEventRequest(BaseModel):
+    type: Literal["demand_spike", "route_disruption", "station_outage", "depot_constraint", "shipment_delay", "supply_shortfall"]
+    start_tick: int = 0
+    duration_ticks: int = Field(default=1, gt=0)
+    parameters: dict[str, Any] = Field(default_factory=dict)
+
+
+class DemoFaultRequest(BaseModel):
+    type: Literal["latency", "unavailable", "error_rate", "stale_data", "stream_disconnect"]
+    duration_seconds: int = Field(default=60, gt=0, le=3600)
+    parameters: dict[str, Any] = Field(default_factory=dict)
+
+
+class DemoClearRequest(BaseModel):
+    reason: str = Field(default="demo recovery", min_length=1, max_length=500)
