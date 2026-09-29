@@ -50,11 +50,11 @@ export function OperationsDashboard() {
 
       <div className="dashboard-grid">
         <div className="dashboard-column">
-          <NetworkPanel state={state} />
+          <NetworkPanel state={state} risks={risks} />
           <EventsPanel state={state} risks={risks} trips={tripwire.trips} />
         </div>
         <div className="dashboard-column">
-          <RiskPanel risks={risks} planAvailable={plan !== null} onSelect={setSelectedRisk} />
+          <RiskPanel risks={risks} planAvailable={plan !== null} currentTick={state?.run.tick} onSelect={setSelectedRisk} />
           <ProjectionPanel plan={plan} state={state} selectedKey={selectedRisk} onSelect={setSelectedRisk} />
           <HealthPanel health={health} />
         </div>
@@ -67,5 +67,6 @@ export function OperationsDashboard() {
     </main>
   )
 }
+
 
 

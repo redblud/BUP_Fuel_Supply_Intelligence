@@ -6,7 +6,7 @@ type Trip = TripwireStatus['trips'][number]
 export function EventsPanel({ state, risks, trips }: { state: NetworkState | null; risks: RiskAssessment[]; trips: Trip[] }) {
   const alerts = [
     ...trips.filter((trip) => trip.severity === 'WARNING').map((trip) => ({ key: 'trip-' + trip.code + trip.scope, tick: trip.detected_tick ?? -1, label: trip.code, detail: trip.message, kind: 'WARNING' })),
-    ...risks.filter((risk) => risk.level === 'CRITICAL').map((risk) => ({ key: 'risk-' + risk.station_id + risk.fuel_type, tick: risk.projected_stockout_tick ?? -1, label: 'CRITICAL · ' + title(risk.station_id), detail: risk.reason, kind: 'CRITICAL' })),
+    ...risks.filter((risk) => risk.level === 'CRITICAL').map((risk) => ({ key: 'risk-' + risk.station_id + risk.fuel_type, tick: state?.run.tick ?? -1, label: 'CRITICAL · ' + title(risk.station_id), detail: risk.reason, kind: 'CRITICAL' })),
   ].sort((a, b) => b.tick - a.tick)
   const events = [...(state?.events ?? [])].sort((a, b) => b.start_tick - a.start_tick)
   return <section className="panel" aria-labelledby="events-title">
@@ -16,4 +16,5 @@ export function EventsPanel({ state, risks, trips }: { state: NetworkState | nul
     {alerts.length === 0 && events.length === 0 ? <p className="muted">{state ? 'No active alerts or recorded events.' : 'Event data unavailable.'}</p> : null}
   </section>
 }
+
 
