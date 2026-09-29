@@ -59,6 +59,11 @@ def sync_lifecycle(states: dict[str, RecommendationState], plan: Plan) -> dict[s
     return out
 
 
+def just_expired(states: dict[str, RecommendationState], tick: int) -> list[str]:
+    """Ids that expired on this tick, so the Tripwire reports each expiry once instead of forever."""
+    return sorted(rid for rid, st in states.items() if st.status == "EXPIRED" and st.updated_tick == tick)
+
+
 def refusal_reason(rec: Recommendation | None, trip: TripwireStatus, kill_switch: bool, tick: int) -> DecisionError | None:
     """Why this recommendation may not execute right now, or None."""
     if kill_switch:
@@ -91,7 +96,8 @@ async def _persist(
 def _trip(ctx: AppContext, state: NetworkState, plan: Plan, ignore_unknown_for: str | None = None) -> TripwireStatus:
     unknown = sum(1 for s in ctx.recommendation_states.values() if is_unknown(s) and s.recommendation_id != ignore_unknown_for)
     return tripwire.evaluate(state, plan, str(ctx.state.last_error) if ctx.state.last_error else None, unknown_executions=unknown,
-                             persistence_error=ctx.state.persistence_error)
+                             persistence_error=ctx.state.persistence_error,
+                             expired_recommendations=just_expired(ctx.recommendation_states, state.run.tick))
 
 
 async def approve(ctx: AppContext, recommendation_id: str) -> RecommendationState:
