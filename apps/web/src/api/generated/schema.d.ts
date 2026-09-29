@@ -492,6 +492,39 @@ export interface components {
             /** Station Id */
             station_id: string;
         };
+        /**
+         * ForecastConfidence
+         * @description How far to trust the forecast behind a recommendation. Derived only from measured forecast error, never a probability.
+         */
+        ForecastConfidence: {
+            /**
+             * Error Band Liters
+             * @description Measured error applied to forecast demand between now and arrival.
+             */
+            error_band_liters?: number | null;
+            /**
+             * Error Mape
+             * @description Measured forecast error (Forecast.error_mape); null when unmeasured.
+             */
+            error_mape?: number | null;
+            /**
+             * Error Ticks
+             * @description Observed ticks that error was measured on.
+             */
+            error_ticks: number;
+            /**
+             * Level
+             * @enum {string}
+             */
+            level: "HIGH" | "MEDIUM" | "LOW" | "UNMEASURED";
+            /** Message */
+            message: string;
+            /**
+             * Shortfall Liters
+             * @description Safety stock minus projected inventory at arrival, without this shipment; 0 if none.
+             */
+            shortfall_liters: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -601,6 +634,7 @@ export interface components {
         Recommendation: {
             /** Alternatives */
             alternatives: components["schemas"]["AlternativeAction"][];
+            confidence: components["schemas"]["ForecastConfidence"];
             /** Current Inventory */
             current_inventory: number;
             /** Dispatch Tick */
@@ -626,6 +660,7 @@ export interface components {
              * @description Deterministic: same NetworkState + Policy -> same id.
              */
             id: string;
+            impact: components["schemas"]["RecommendationImpact"];
             /** Planner Version */
             planner_version: string;
             /**
@@ -651,6 +686,28 @@ export interface components {
             stress_margin_liters: number;
             /** Summary */
             summary: string;
+        };
+        /**
+         * RecommendationImpact
+         * @description What sending this shipment changes over the forecast horizon, versus not sending it (earlier planned shipments included).
+         */
+        RecommendationImpact: {
+            /** Horizon Ticks */
+            horizon_ticks: number;
+            /** Inventory At Arrival With */
+            inventory_at_arrival_with: number;
+            /** Inventory At Arrival Without */
+            inventory_at_arrival_without: number;
+            /**
+             * Stockout Ticks Avoided
+             * @description Horizon ticks at zero inventory without the shipment minus with it.
+             */
+            stockout_ticks_avoided: number;
+            /**
+             * Unmet Liters Avoided
+             * @description Forecast demand that would go unserved without the shipment minus with it.
+             */
+            unmet_liters_avoided: number;
         };
         /** RecommendationState */
         RecommendationState: {

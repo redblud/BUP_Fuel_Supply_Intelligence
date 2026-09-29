@@ -34,9 +34,10 @@ from app.domain.models import (
     Station,
 )
 from app.intelligence.forecast import expected_arrival
+from app.intelligence.impact import assess_confidence, assess_impact
 from app.intelligence.topology import arrival_tick, feasible_routes, open_routes
 
-PLANNER_VERSION = "order-up-to-v2"
+PLANNER_VERSION = "order-up-to-v3"
 MAX_SHIPMENTS_PER_STATION = 4
 WATER_FILL_ITERATIONS = 60
 FAIR_SHARE = "fair share of depot stock, balancing cover hours across stations"
@@ -118,6 +119,7 @@ def plan_replenishment(
         if expected_arrival(alloc, state) is not None:
             open_incoming[(alloc.destination_station_id, alloc.fuel_type)] += alloc.quantity
     planned: dict[tuple[str, str], float] = defaultdict(float)
+    planned_arrivals: dict[tuple[str, str], list[tuple[int, float]]] = defaultdict(list)
 
     candidates: list[Candidate] = []
     blocked: list[BlockedCase] = []
@@ -266,6 +268,18 @@ def plan_replenishment(
                 continue
             chosen, qty, binding, opts = result
             route = chosen.route
+            impact = assess_impact(
+                c.proj,
+                fc_by_key[key],
+                c.station.inventory.get(c.fuel, 0.0),
+                c.station.capacity.get(c.fuel, float("inf")),
+                c.station.status == "OUTAGE",
+                planned_arrivals[key],
+                chosen.arrival,
+                qty,
+            )
+            confidence = assess_confidence(fc_by_key[key], chosen.arrival, c.risk.safety_stock - chosen.at_arrival)
+            planned_arrivals[key].append((chosen.arrival, qty))
             depot_stock[(route.source_depot_id, c.fuel)] -= qty
             dispatch_left[route.source_depot_id] -= qty
             open_incoming[key] += qty
@@ -315,6 +329,8 @@ def plan_replenishment(
                         for o in opts
                         if o.route.id != route.id
                     ],
+                    impact=impact,
+                    confidence=confidence,
                     planner_version=PLANNER_VERSION,
                 )
             )
