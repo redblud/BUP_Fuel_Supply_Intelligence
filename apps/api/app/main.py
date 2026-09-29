@@ -16,7 +16,14 @@ from app.state.service import StateService
 
 def build_client(settings: Settings) -> SimulatorClient:
     if settings.simulator_mode == "real":
-        return RealSimulatorClient(settings.simulator_base_url, settings.simulator_connect_timeout, settings.simulator_read_timeout)
+        return RealSimulatorClient(
+            settings.simulator_base_url,
+            settings.simulator_connect_timeout,
+            settings.simulator_read_timeout,
+            max_retries=settings.simulator_max_retries,
+            backoff_base=settings.simulator_backoff_base,
+            backoff_max=settings.simulator_backoff_max,
+        )
     return FakeSimulatorClient(settings.fixture_dir, settings.fixture_scenario)
 
 

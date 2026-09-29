@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     simulator_base_url: str = "http://simulator:8000"
     simulator_connect_timeout: float = 2.0
     simulator_read_timeout: float = 5.0
+    simulator_max_retries: int = 2
+    simulator_backoff_base: float = 0.2
+    simulator_backoff_max: float = 2.0
     fixture_dir: Path = REPO_ROOT / "tests" / "fixtures"
     fixture_scenario: str = "route-disruption"
 
