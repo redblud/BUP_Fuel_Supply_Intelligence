@@ -55,9 +55,15 @@ async def dashboard(ctx: AppContext = Depends(get_ctx)) -> DashboardResponse:
         except Exception as exc:  # keep showing state even if intelligence breaks
             log.exception("build_plan failed")
             health.components["forecast"] = ComponentHealth(status="DOWN", detail=f"{type(exc).__name__}: {exc}")
+    trusted_snapshot = (
+        state is not None
+        and state.meta.freshness in ("FRESH", "FIXTURE")
+        and not state.meta.stale
+        and state.meta.consistent
+    )
     health.components["snapshot"] = ComponentHealth(
-        status="HEALTHY" if state and state.meta.freshness in ("FRESH", "FIXTURE") else "DOWN" if state is None else "DEGRADED",
-        detail=state.meta.freshness if state else "UNAVAILABLE",
+        status="HEALTHY" if trusted_snapshot else "DOWN" if state is None else "DEGRADED",
+        detail="STALE" if state and state.meta.stale else state.meta.freshness if state else "UNAVAILABLE",
     )
     trip = tripwire.evaluate(state, plan, str(ctx.state.last_error) if ctx.state.last_error else None)
     health.components["tripwire"] = ComponentHealth(status="HEALTHY" if trip.state == "CLEAR" else "DEGRADED", detail=trip.state)

@@ -26,6 +26,7 @@ def test_stale_fixture_trips(client) -> None:
         body = c.get("/api/dashboard").json()
     assert body["tripwire"]["state"] == "TRIPPED"
     assert "SNAPSHOT_STALE" in [t["code"] for t in body["tripwire"]["trips"]]
+    assert body["health"]["components"]["snapshot"] == {"status": "DEGRADED", "detail": "STALE"}
 
 
 def test_missing_fixture_degrades_not_crashes(client) -> None:
