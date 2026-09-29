@@ -7,6 +7,8 @@ services:
     environment:
       FIXTURE_DIR: /fixtures
       DATABASE_URL: sqlite+aiosqlite:////data/fuelops.db
+      OPERATOR_TOKEN: ${OPERATOR_TOKEN:-}
+      DEMO_CONTROLS_ENABLED: ${DEMO_CONTROLS_ENABLED:-false}
     ports:
       - "127.0.0.1:8000:8000"
     volumes:

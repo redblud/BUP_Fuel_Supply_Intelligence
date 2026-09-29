@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { api, ApiError } from '../api/client'
+import { api, ApiError, getOperatorToken, setOperatorToken } from '../api/client'
 import type { AutomationState, DashboardResponse } from '../api/types'
 import { title } from '../lib/format'
 
 export function ControlsPanel({ data }: { data: DashboardResponse }) {
   const queryClient = useQueryClient()
   const [message, setMessage] = useState('')
+  const [token, setToken] = useState(getOperatorToken)
   const [draftMode, setDraftMode] = useState<AutomationState['mode'] | null>(null)
   const mode = draftMode ?? data.automation.mode
   const trusted = data.state?.meta.freshness === 'FRESH' || data.state?.meta.freshness === 'FIXTURE'
@@ -16,13 +17,16 @@ export function ControlsPanel({ data }: { data: DashboardResponse }) {
   const simulator = useMutation({ mutationFn: api.simControl, onSuccess: async () => { setMessage('Simulator command sent.'); await queryClient.invalidateQueries({ queryKey: ['dashboard'] }) }, onError: showError })
 
   function showError(error: Error) {
-    if (error instanceof ApiError && error.status === 501) setMessage('This control is not available from the current backend.')
+    if (error instanceof ApiError && error.status === 401) setMessage(token ? 'The operator token was not accepted. Check it and try again.' : 'Enter the operator token to use these controls.')
+    else if (error instanceof ApiError && error.status === 403) setMessage('Demo controls are disabled on this server.')
+    else if (error instanceof ApiError && error.status === 501) setMessage('This control is not available from the current backend.')
     else if (error instanceof ApiError && error.status === 409) setMessage('State changed. Refresh and review before trying again: ' + error.message)
     else setMessage(error.message)
   }
 
   return <section className="panel" aria-labelledby="controls-title">
     <div className="panel-heading"><div><span className="eyebrow">OPERATOR ACTIONS</span><h2 id="controls-title">Controls</h2></div></div>
+    <div className="control-group"><label className="field-label" htmlFor="operator-token">Operator token</label><div className="control-inline"><input id="operator-token" type="password" autoComplete="off" value={token} onChange={(event) => { setToken(event.target.value); setOperatorToken(event.target.value) }} placeholder="Needed to approve, reject or change mode" /></div></div>
     <div className="control-group"><label className="field-label" htmlFor="mode-select">Operating mode</label><div className="control-inline"><select id="mode-select" value={mode} onChange={(event) => setDraftMode(event.target.value as AutomationState['mode'])} disabled={blocked || automation.isPending}><option value="ADVISORY">Advisory</option><option value="GUARDED_AUTO">Guarded auto</option><option value="MANUAL_DEMO">Manual demo</option></select><button className="control-button" disabled={blocked || automation.isPending} onClick={() => automation.mutate({ mode, kill_switch: data.automation.kill_switch })}>Apply</button></div></div>
     <div className="control-group"><span className="field-label">Kill switch</span><div className="control-inline"><strong className={data.automation.kill_switch ? 'danger-text' : ''}>{data.automation.kill_switch ? 'ON' : 'OFF'}</strong><button className="control-button" disabled={blocked || automation.isPending} onClick={() => automation.mutate({ mode: data.automation.mode, kill_switch: !data.automation.kill_switch })}>{data.automation.kill_switch ? 'Turn off' : 'Turn on'}</button></div></div>
     {blocked ? <p className="danger-text">Tripwire tripped. Automation controls are paused.</p> : null}

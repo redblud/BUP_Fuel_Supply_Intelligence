@@ -35,7 +35,10 @@ export interface paths {
         };
         /** Get Automation */
         get: operations["get_automation_api_automation_get"];
-        /** Set Automation */
+        /**
+         * Set Automation
+         * @description Set the operating mode and kill switch. Needs the operator token; the actor is recorded.
+         */
         put: operations["set_automation_api_automation_put"];
         post?: never;
         delete?: never;
@@ -190,7 +193,7 @@ export interface paths {
         put?: never;
         /**
          * Approve
-         * @description Revalidate on a fresh snapshot, check kill switch, Tripwire and expiry, then execute once (idempotent).
+         * @description Revalidate on a fresh snapshot, check kill switch, Tripwire and expiry, then execute once (idempotent). Needs the operator token.
          */
         post: operations["approve_api_recommendations__recommendation_id__approve_post"];
         delete?: never;
@@ -210,7 +213,7 @@ export interface paths {
         put?: never;
         /**
          * Reject
-         * @description Decline a proposed recommendation.
+         * @description Decline a proposed recommendation. Needs the operator token.
          */
         post: operations["reject_api_recommendations__recommendation_id__reject_post"];
         delete?: never;
@@ -230,7 +233,7 @@ export interface paths {
         put?: never;
         /**
          * Sim Control
-         * @description Demo controls proxied to simulator /admin/*. Never used by planning logic.
+         * @description Demo controls proxied to simulator /admin/*. Needs the operator token and DEMO_CONTROLS_ENABLED. Never used by planning logic.
          */
         post: operations["sim_control_api_sim_control_post"];
         delete?: never;
@@ -1117,7 +1120,10 @@ export interface operations {
     set_automation_api_automation_put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-operator-token"?: string | null;
+                "x-operator-name"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1134,6 +1140,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AutomationState"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
                 };
             };
             /** @description Conflict */
@@ -1365,7 +1380,10 @@ export interface operations {
     approve_api_recommendations__recommendation_id__approve_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-operator-token"?: string | null;
+                "x-operator-name"?: string | null;
+            };
             path: {
                 recommendation_id: string;
             };
@@ -1380,6 +1398,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecommendationState"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
                 };
             };
             /** @description Not Found */
@@ -1432,7 +1459,10 @@ export interface operations {
     reject_api_recommendations__recommendation_id__reject_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-operator-token"?: string | null;
+                "x-operator-name"?: string | null;
+            };
             path: {
                 recommendation_id: string;
             };
@@ -1447,6 +1477,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecommendationState"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
                 };
             };
             /** @description Not Found */
@@ -1481,7 +1520,10 @@ export interface operations {
     sim_control_api_sim_control_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-operator-token"?: string | null;
+                "x-operator-name"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1500,6 +1542,24 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
                 };
             };
             /** @description Validation Error */

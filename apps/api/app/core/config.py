@@ -29,6 +29,10 @@ class Settings(BaseSettings):
 
     database_url: str = f"sqlite+aiosqlite:///{REPO_ROOT / 'data' / 'fuelops.db'}"
 
+    # Shared secret for approve, reject, mode/kill switch and demo controls. Empty keeps those routes closed.
+    operator_token: str = ""
+    demo_controls_enabled: bool = False
+
     automation_default_mode: Literal["ADVISORY", "GUARDED_AUTO", "MANUAL_DEMO"] = "ADVISORY"
     snapshot_tick_tolerance: int = 1
     auto_interval: float = 2.0  # guarded automation pass cadence

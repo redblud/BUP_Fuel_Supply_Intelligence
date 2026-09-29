@@ -13,10 +13,31 @@ export class ApiError extends Error {
   }
 }
 
+const TOKEN_KEY = 'fuelops.operatorToken'
+
+/** The operator token lives in this tab's sessionStorage only; it is never bundled or written to disk. */
+export function getOperatorToken(): string {
+  try {
+    return sessionStorage.getItem(TOKEN_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+export function setOperatorToken(token: string): void {
+  try {
+    if (token) sessionStorage.setItem(TOKEN_KEY, token)
+    else sessionStorage.removeItem(TOKEN_KEY)
+  } catch {
+    // Storage blocked: the token then only lasts until the next reload.
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = init?.method && init.method !== 'GET' ? getOperatorToken() : ''
   const res = await fetch(BASE + path, {
     ...init,
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    headers: { 'Content-Type': 'application/json', ...(token ? { 'X-Operator-Token': token } : {}), ...init?.headers },
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))

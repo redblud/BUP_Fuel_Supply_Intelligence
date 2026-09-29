@@ -2060,7 +2060,42 @@
         ]
       },
       "put": {
+        "description": "Set the operating mode and kill switch. Needs the operator token; the actor is recorded.",
         "operationId": "set_automation_api_automation_put",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-operator-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Operator-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-operator-name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Operator-Name"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -2081,6 +2116,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
           },
           "409": {
             "content": {
@@ -2464,7 +2509,7 @@
     },
     "/api/recommendations/{recommendation_id}/approve": {
       "post": {
-        "description": "Revalidate on a fresh snapshot, check kill switch, Tripwire and expiry, then execute once (idempotent).",
+        "description": "Revalidate on a fresh snapshot, check kill switch, Tripwire and expiry, then execute once (idempotent). Needs the operator token.",
         "operationId": "approve_api_recommendations__recommendation_id__approve_post",
         "parameters": [
           {
@@ -2474,6 +2519,38 @@
             "schema": {
               "title": "Recommendation Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-operator-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Operator-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-operator-name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Operator-Name"
             }
           }
         ],
@@ -2487,6 +2564,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
           },
           "404": {
             "content": {
@@ -2547,7 +2634,7 @@
     },
     "/api/recommendations/{recommendation_id}/reject": {
       "post": {
-        "description": "Decline a proposed recommendation.",
+        "description": "Decline a proposed recommendation. Needs the operator token.",
         "operationId": "reject_api_recommendations__recommendation_id__reject_post",
         "parameters": [
           {
@@ -2557,6 +2644,38 @@
             "schema": {
               "title": "Recommendation Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-operator-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Operator-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-operator-name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Operator-Name"
             }
           }
         ],
@@ -2570,6 +2689,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
           },
           "404": {
             "content": {
@@ -2610,8 +2739,42 @@
     },
     "/api/sim/control": {
       "post": {
-        "description": "Demo controls proxied to simulator /admin/*. Never used by planning logic.",
+        "description": "Demo controls proxied to simulator /admin/*. Needs the operator token and DEMO_CONTROLS_ENABLED. Never used by planning logic.",
         "operationId": "sim_control_api_sim_control_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-operator-token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Operator-Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-operator-name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Operator-Name"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -2634,6 +2797,26 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Forbidden"
           },
           "422": {
             "content": {

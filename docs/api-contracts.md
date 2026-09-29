@@ -78,3 +78,12 @@ Errors use `{"detail": {"code": "UPPER_SNAKE", "message": "..."}}`.
 
 Wanted next (issues): `risk-tongi-diesel`, `allocation-in-transit`, `reset-recovery`, `scarcity` (two stations competing
 for one depot), and real recordings from the simulator.
+
+## Operator access
+
+`POST /api/recommendations/{id}/approve`, `POST /api/recommendations/{id}/reject`, `PUT /api/automation` and `POST /api/sim/control` need the header `X-Operator-Token` (the server's `OPERATOR_TOKEN`). Read endpoints stay open.
+
+- Missing or wrong token: `401` with `{"detail": {"code", "message"}}`. Codes: `OPERATOR_TOKEN_REQUIRED`, `OPERATOR_TOKEN_INVALID`, `OPERATOR_AUTH_NOT_CONFIGURED` (no token set on the server: the routes stay closed).
+- `POST /api/sim/control` also needs `DEMO_CONTROLS_ENABLED=true`; otherwise `403 DEMO_CONTROLS_DISABLED`.
+- Optional `X-Operator-Name` labels the actor in the audit record (`system_events`, kind `operator_action`). It is a label, not an identity.
+- Guarded Auto executes through the gateway without a token; auditing those automatic actions is tracked separately (#19).
