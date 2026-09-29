@@ -317,6 +317,21 @@ export interface components {
              */
             status: "OPEN" | "CONSTRAINED";
         };
+        /**
+         * DepotSupplyProjection
+         * @description Expected depot inventory after scheduled supply arrivals and crisis effects.
+         */
+        DepotSupplyProjection: {
+            /** Depot Id */
+            depot_id: string;
+            /**
+             * Fuel Type
+             * @enum {string}
+             */
+            fuel_type: "DIESEL" | "PETROL" | "OCTANE";
+            /** Points */
+            points: components["schemas"]["ProjectionPoint"][];
+        };
         /** ErrorBody */
         ErrorBody: {
             /** Code */
@@ -334,6 +349,8 @@ export interface components {
              * @description alpha in forecast = alpha x structural demand.
              */
             calibration: number;
+            /** @description Measured rolling error; unavailable for a cold start. */
+            error: components["schemas"]["ForecastError"];
             /**
              * Fuel Type
              * @enum {string}
@@ -348,6 +365,22 @@ export interface components {
             /** Station Id */
             station_id: string;
         };
+        /**
+         * ForecastError
+         * @description Measured one-step forecast error over recent demand observations.
+         */
+        ForecastError: {
+            /** Mae Liters */
+            mae_liters?: number | null;
+            /** Rmse Liters */
+            rmse_liters?: number | null;
+            /** Sample Count */
+            sample_count: number;
+            /** Smape Percent */
+            smape_percent?: number | null;
+            /** Wape Percent */
+            wape_percent?: number | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -360,8 +393,12 @@ export interface components {
              * @enum {string}
              */
             fuel_type: "DIESEL" | "PETROL" | "OCTANE";
+            /** Minimum Projected Inventory */
+            minimum_projected_inventory: number;
             /** Points */
             points: components["schemas"]["ProjectionPoint"][];
+            /** Projected Shortage Liters */
+            projected_shortage_liters: number;
             /** Safety Stock */
             safety_stock: number;
             /** Station Id */
@@ -396,6 +433,8 @@ export interface components {
         };
         /** Plan */
         Plan: {
+            /** Depot Projections */
+            depot_projections: components["schemas"]["DepotSupplyProjection"][];
             /** Forecasts */
             forecasts: components["schemas"]["Forecast"][];
             /**
@@ -419,6 +458,11 @@ export interface components {
         /** ProjectionPoint */
         ProjectionPoint: {
             /**
+             * Demand
+             * @default 0
+             */
+            demand: number;
+            /**
              * Incoming
              * @default 0
              */
@@ -427,6 +471,11 @@ export interface components {
             inventory: number;
             /** Tick */
             tick: number;
+            /**
+             * Unmet Demand
+             * @default 0
+             */
+            unmet_demand: number;
         };
         /** Recommendation */
         Recommendation: {
@@ -471,7 +520,7 @@ export interface components {
             /** Projected Stockout Tick */
             projected_stockout_tick: number | null;
             /** Reason Codes */
-            reason_codes: ("SAFETY_STOCK_BREACH" | "STOCKOUT_BEFORE_ARRIVAL" | "CONNECTIVITY_RISK" | "SINGLE_SOURCE" | "STATION_OUTAGE" | "SCARCITY_LIMITED" | "ROUTE_DISRUPTED")[];
+            reason_codes: ("SAFETY_STOCK_BREACH" | "STOCKOUT_BEFORE_ARRIVAL" | "CONNECTIVITY_RISK" | "SINGLE_SOURCE" | "STATION_OUTAGE" | "SCARCITY_LIMITED" | "ROUTE_DISRUPTED" | "FUEL_SCARCITY" | "PROJECTED_SHORTAGE" | "DEMAND_PRESSURE" | "INCOMING_SUPPLY")[];
             request: components["schemas"]["AllocationRequest"];
             /** Station Id */
             station_id: string;
@@ -510,11 +559,18 @@ export interface components {
         };
         /** RiskAssessment */
         RiskAssessment: {
+            /** Coverage Hours */
+            coverage_hours: number | null;
+            /**
+             * Coverage Ticks
+             * @description Current inventory divided by average forecast demand per tick, before incoming supply.
+             */
+            coverage_ticks: number | null;
             /** Current Inventory */
             current_inventory: number;
             /**
              * Earliest Arrival Tick
-             * @description Earliest tick a new shipment could land; null if unreachable.
+             * @description Earliest tick a new shipment from a currently stocked, reachable depot could land.
              */
             earliest_arrival_tick: number | null;
             /**
@@ -527,25 +583,60 @@ export interface components {
              * @enum {string}
              */
             level: "OK" | "WATCH" | "HIGH" | "CRITICAL";
+            /** Minimum Projected Inventory */
+            minimum_projected_inventory: number;
             /** Projected Inventory At Arrival */
             projected_inventory_at_arrival: number | null;
             /** Projected Safety Breach Tick */
             projected_safety_breach_tick: number | null;
+            /**
+             * Projected Shortage Liters
+             * @description Cumulative forecast demand that cannot be served over the horizon.
+             */
+            projected_shortage_liters: number;
             /** Projected Stockout Tick */
             projected_stockout_tick: number | null;
             /** Reason */
             reason: string;
             /** Reason Codes */
-            reason_codes: ("SAFETY_STOCK_BREACH" | "STOCKOUT_BEFORE_ARRIVAL" | "CONNECTIVITY_RISK" | "SINGLE_SOURCE" | "STATION_OUTAGE" | "SCARCITY_LIMITED" | "ROUTE_DISRUPTED")[];
+            reason_codes: ("SAFETY_STOCK_BREACH" | "STOCKOUT_BEFORE_ARRIVAL" | "CONNECTIVITY_RISK" | "SINGLE_SOURCE" | "STATION_OUTAGE" | "SCARCITY_LIMITED" | "ROUTE_DISRUPTED" | "FUEL_SCARCITY" | "PROJECTED_SHORTAGE" | "DEMAND_PRESSURE" | "INCOMING_SUPPLY")[];
             /**
              * Redundancy
              * @description Number of currently feasible routes to this station for this fuel.
              */
             redundancy: number;
+            /** Risk Drivers */
+            risk_drivers: components["schemas"]["RiskDriver"][];
             /** Safety Stock */
             safety_stock: number;
             /** Station Id */
             station_id: string;
+            /**
+             * Time To Safety Breach Ticks
+             * @description Ticks from the snapshot to the first safety-stock breach.
+             */
+            time_to_safety_breach_ticks: number | null;
+            /**
+             * Time To Stockout Ticks
+             * @description Ticks from the snapshot to projected zero inventory.
+             */
+            time_to_stockout_ticks: number | null;
+        };
+        /** RiskDriver */
+        RiskDriver: {
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "SAFETY_STOCK_BREACH" | "STOCKOUT_BEFORE_ARRIVAL" | "CONNECTIVITY_RISK" | "SINGLE_SOURCE" | "STATION_OUTAGE" | "SCARCITY_LIMITED" | "ROUTE_DISRUPTED" | "FUEL_SCARCITY" | "PROJECTED_SHORTAGE" | "DEMAND_PRESSURE" | "INCOMING_SUPPLY";
+            /** Detail */
+            detail: string;
+            /** Threshold */
+            threshold?: number | null;
+            /** Unit */
+            unit?: string | null;
+            /** Value */
+            value?: number | null;
         };
         /** Route */
         Route: {

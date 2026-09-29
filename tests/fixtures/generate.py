@@ -4,6 +4,8 @@ Each tests/fixtures/<scenario>.json maps simulator resource names to raw /v1/* b
 served by FakeSimulatorClient. Scenarios:
 
   normal            tick 0, initial world, nothing happening
+  demand-spike      tick 24, Dhaka demand spike starts after baseline history
+  scarcity          tick 0, Mirpur and Tongi compete for insufficient Gazipur diesel
   route-disruption  tick 40: Dhaka demand spike x1.8, route-gazipur-mirpur DISRUPTED,
                     one diesel shipment in transit to Tongi, Tongi diesel at risk
   stale             route-disruption with X-Simulator-Stale on every read
@@ -15,17 +17,16 @@ Representative, not recorded. Replace with real recordings once the simulator ru
 """
 
 import copy
-import sys
-
 import json
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "apps" / "api"))
 
-from app.domain.models import FUEL_TYPES, NetworkState  # noqa: E402
-from app.intelligence.forecast import structural_demand  # noqa: E402
+from app.domain.models import FUEL_TYPES, NetworkState
+from app.intelligence.forecast import structural_demand
 
 OUT = ROOT / "tests" / "fixtures"
 TICK_MINUTES = 15
@@ -157,8 +158,62 @@ def build(TICK: int, crisis: bool) -> dict:
     return raw
 
 
+def build_demand_spike() -> dict:
+    """Spike starts on the current tick after a full baseline calibration window."""
+    raw = build(24, crisis=False)
+    event = {**copy.deepcopy(EVENTS[1]), "status": "ACTIVE"}
+    raw["events"] = [event]
+    dhaka_station_ids = {
+        station["id"] for station in raw["stations"]
+        if station["region_id"] in event["parameters"]["region_ids"]
+    }
+    stations_by_id = {station["id"]: station for station in raw["stations"]}
+    served_delta = 0.0
+    for station_id in dhaka_station_ids:
+        stations_by_id[station_id]["demand_multiplier"] = event["parameters"]["multiplier"]
+    for observation in raw["demand-history"]:
+        if observation["tick"] != event["start_tick"] or observation["station_id"] not in dhaka_station_ids:
+            continue
+        previous = observation["demand_liters"]
+        demand = round(previous * event["parameters"]["multiplier"], 3)
+        extra = demand - previous
+        station = stations_by_id[observation["station_id"]]
+        fuel = observation["fuel_type"]
+        station["inventory"][fuel] = round(station["inventory"][fuel] - extra, 3)
+        observation["demand_liters"] = demand
+        observation["served_liters"] = demand
+        observation["unmet_liters"] = 0.0
+        served_delta += extra
+    raw["metrics"]["served_demand_liters"] = round(raw["metrics"]["served_demand_liters"] + served_delta, 3)
+    raw["metrics"]["service_level"] = 1.0
+    return raw
+
+
+def build_scarcity() -> dict:
+    """Two urgent stations can obtain diesel only from one constrained shared budget."""
+    raw = build(0, crisis=False)
+    raw["instance"]["scenario_id"] = "scarcity"
+    gazipur = next(depot for depot in raw["depots"] if depot["id"] == "depot-gazipur")
+    gazipur["capacity"]["DIESEL"] = 20000
+    gazipur["inventory"]["DIESEL"] = 8500
+    gazipur["dispatch_capacity_per_tick"] = 6500
+
+    for station in raw["stations"]:
+        if station["id"] == "station-mirpur":
+            station["inventory"]["DIESEL"] = 250
+        elif station["id"] == "station-tongi":
+            station["inventory"]["DIESEL"] = 900
+    for route in raw["routes"]:
+        if route["id"] in ("route-gazipur-mirpur", "route-gazipur-tongi"):
+            route["max_shipment"] = 3500
+        elif route["destination_station_id"] in ("station-mirpur", "station-tongi"):
+            route["status"] = "DISRUPTED"
+    return raw
+
+
 def main() -> None:
-    scenarios = {"normal": build(0, crisis=False), "route-disruption": build(40, crisis=True)}
+    scenarios = {"normal": build(0, crisis=False), "demand-spike": build_demand_spike(), "scarcity": build_scarcity(),
+                 "route-disruption": build(40, crisis=True)}
     scenarios["stale"] = {**scenarios["route-disruption"], "stale": True}
     for name, raw in scenarios.items():
         (OUT / f"{name}.json").write_text(json.dumps(raw, indent=1) + "\n", encoding="utf-8")

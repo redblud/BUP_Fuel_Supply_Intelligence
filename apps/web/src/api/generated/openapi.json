@@ -426,6 +426,38 @@
         "title": "Depot",
         "type": "object"
       },
+      "DepotSupplyProjection": {
+        "description": "Expected depot inventory after scheduled supply arrivals and crisis effects.",
+        "properties": {
+          "depot_id": {
+            "title": "Depot Id",
+            "type": "string"
+          },
+          "fuel_type": {
+            "enum": [
+              "DIESEL",
+              "PETROL",
+              "OCTANE"
+            ],
+            "title": "Fuel Type",
+            "type": "string"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectionPoint"
+            },
+            "title": "Points",
+            "type": "array"
+          }
+        },
+        "required": [
+          "depot_id",
+          "fuel_type",
+          "points"
+        ],
+        "title": "DepotSupplyProjection",
+        "type": "object"
+      },
       "ErrorBody": {
         "properties": {
           "code": {
@@ -451,6 +483,10 @@
             "description": "alpha in forecast = alpha x structural demand.",
             "title": "Calibration",
             "type": "number"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ForecastError",
+            "description": "Measured rolling error; unavailable for a cold start."
           },
           "fuel_type": {
             "enum": [
@@ -487,9 +523,73 @@
           "start_tick",
           "liters_per_tick",
           "calibration",
+          "error",
           "method"
         ],
         "title": "Forecast",
+        "type": "object"
+      },
+      "ForecastError": {
+        "description": "Measured one-step forecast error over recent demand observations.",
+        "properties": {
+          "mae_liters": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mae Liters"
+          },
+          "rmse_liters": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rmse Liters"
+          },
+          "sample_count": {
+            "minimum": 0.0,
+            "title": "Sample Count",
+            "type": "integer"
+          },
+          "smape_percent": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Smape Percent"
+          },
+          "wape_percent": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wape Percent"
+          }
+        },
+        "required": [
+          "sample_count"
+        ],
+        "title": "ForecastError",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -516,12 +616,20 @@
             "title": "Fuel Type",
             "type": "string"
           },
+          "minimum_projected_inventory": {
+            "title": "Minimum Projected Inventory",
+            "type": "number"
+          },
           "points": {
             "items": {
               "$ref": "#/components/schemas/ProjectionPoint"
             },
             "title": "Points",
             "type": "array"
+          },
+          "projected_shortage_liters": {
+            "title": "Projected Shortage Liters",
+            "type": "number"
           },
           "safety_stock": {
             "title": "Safety Stock",
@@ -536,6 +644,8 @@
           "station_id",
           "fuel_type",
           "safety_stock",
+          "minimum_projected_inventory",
+          "projected_shortage_liters",
           "points"
         ],
         "title": "InventoryProjection",
@@ -634,6 +744,13 @@
       },
       "Plan": {
         "properties": {
+          "depot_projections": {
+            "items": {
+              "$ref": "#/components/schemas/DepotSupplyProjection"
+            },
+            "title": "Depot Projections",
+            "type": "array"
+          },
           "forecasts": {
             "items": {
               "$ref": "#/components/schemas/Forecast"
@@ -688,6 +805,7 @@
           "run_id",
           "planner_version",
           "forecasts",
+          "depot_projections",
           "projections",
           "risks",
           "recommendations"
@@ -697,6 +815,11 @@
       },
       "ProjectionPoint": {
         "properties": {
+          "demand": {
+            "default": 0.0,
+            "title": "Demand",
+            "type": "number"
+          },
           "incoming": {
             "default": 0.0,
             "title": "Incoming",
@@ -709,6 +832,11 @@
           "tick": {
             "title": "Tick",
             "type": "integer"
+          },
+          "unmet_demand": {
+            "default": 0.0,
+            "title": "Unmet Demand",
+            "type": "number"
           }
         },
         "required": [
@@ -818,7 +946,11 @@
                 "SINGLE_SOURCE",
                 "STATION_OUTAGE",
                 "SCARCITY_LIMITED",
-                "ROUTE_DISRUPTED"
+                "ROUTE_DISRUPTED",
+                "FUEL_SCARCITY",
+                "PROJECTED_SHORTAGE",
+                "DEMAND_PRESSURE",
+                "INCOMING_SUPPLY"
               ],
               "type": "string"
             },
@@ -946,6 +1078,29 @@
       },
       "RiskAssessment": {
         "properties": {
+          "coverage_hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage Hours"
+          },
+          "coverage_ticks": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Current inventory divided by average forecast demand per tick, before incoming supply.",
+            "title": "Coverage Ticks"
+          },
           "current_inventory": {
             "title": "Current Inventory",
             "type": "number"
@@ -959,7 +1114,7 @@
                 "type": "null"
               }
             ],
-            "description": "Earliest tick a new shipment could land; null if unreachable.",
+            "description": "Earliest tick a new shipment from a currently stocked, reachable depot could land.",
             "title": "Earliest Arrival Tick"
           },
           "fuel_type": {
@@ -980,6 +1135,10 @@
             ],
             "title": "Level",
             "type": "string"
+          },
+          "minimum_projected_inventory": {
+            "title": "Minimum Projected Inventory",
+            "type": "number"
           },
           "projected_inventory_at_arrival": {
             "anyOf": [
@@ -1002,6 +1161,11 @@
               }
             ],
             "title": "Projected Safety Breach Tick"
+          },
+          "projected_shortage_liters": {
+            "description": "Cumulative forecast demand that cannot be served over the horizon.",
+            "title": "Projected Shortage Liters",
+            "type": "number"
           },
           "projected_stockout_tick": {
             "anyOf": [
@@ -1027,7 +1191,11 @@
                 "SINGLE_SOURCE",
                 "STATION_OUTAGE",
                 "SCARCITY_LIMITED",
-                "ROUTE_DISRUPTED"
+                "ROUTE_DISRUPTED",
+                "FUEL_SCARCITY",
+                "PROJECTED_SHORTAGE",
+                "DEMAND_PRESSURE",
+                "INCOMING_SUPPLY"
               ],
               "type": "string"
             },
@@ -1039,6 +1207,13 @@
             "title": "Redundancy",
             "type": "integer"
           },
+          "risk_drivers": {
+            "items": {
+              "$ref": "#/components/schemas/RiskDriver"
+            },
+            "title": "Risk Drivers",
+            "type": "array"
+          },
           "safety_stock": {
             "title": "Safety Stock",
             "type": "number"
@@ -1046,6 +1221,30 @@
           "station_id": {
             "title": "Station Id",
             "type": "string"
+          },
+          "time_to_safety_breach_ticks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Ticks from the snapshot to the first safety-stock breach.",
+            "title": "Time To Safety Breach Ticks"
+          },
+          "time_to_stockout_ticks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Ticks from the snapshot to projected zero inventory.",
+            "title": "Time To Stockout Ticks"
           }
         },
         "required": [
@@ -1058,11 +1257,82 @@
           "projected_inventory_at_arrival",
           "projected_safety_breach_tick",
           "projected_stockout_tick",
+          "time_to_safety_breach_ticks",
+          "time_to_stockout_ticks",
+          "projected_shortage_liters",
+          "minimum_projected_inventory",
+          "coverage_ticks",
+          "coverage_hours",
           "earliest_arrival_tick",
           "redundancy",
+          "risk_drivers",
           "reason"
         ],
         "title": "RiskAssessment",
+        "type": "object"
+      },
+      "RiskDriver": {
+        "properties": {
+          "code": {
+            "enum": [
+              "SAFETY_STOCK_BREACH",
+              "STOCKOUT_BEFORE_ARRIVAL",
+              "CONNECTIVITY_RISK",
+              "SINGLE_SOURCE",
+              "STATION_OUTAGE",
+              "SCARCITY_LIMITED",
+              "ROUTE_DISRUPTED",
+              "FUEL_SCARCITY",
+              "PROJECTED_SHORTAGE",
+              "DEMAND_PRESSURE",
+              "INCOMING_SUPPLY"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "code",
+          "detail"
+        ],
+        "title": "RiskDriver",
         "type": "object"
       },
       "Route": {
